@@ -102,7 +102,7 @@ svg text{font-family:var(--font-body);fill:var(--fg)}
   <section>
     <h2 class="sec">المخطط</h2>
     <div class="filters" id="filters" role="group" aria-label="تصفية حسب الحالة" style="margin-bottom:12px"></div>
-    <div class="plan"><svg id="svg" viewBox="0 0 784 750" role="img" aria-label="مخطط أرضي للشقة"></svg></div>
+    <div class="plan"><svg id="svg" viewBox="0 0 784 680" role="img" aria-label="مخطط أرضي للشقة"></svg></div>
     <p class="note" style="margin-top:8px">الرسم بحسب اتجاه رسمك: جدار النافذة (الشباك) في الأعلى. الخط المتقطع يعني قطعة تحتاج تأكيداً. المقياس تقريبي: افترضت أن عرض الغرفة نحو 7 م، فأعطني عرضها الفعلي لأضبط كل شيء.</p>
   </section>
 
@@ -133,8 +133,8 @@ var STATUS={
 /* الغرف. ghost = لم تظهر في الفيديو */
 var ROOMS=[
   {id:"main",name:"الغرفة",size:"نوم وجلوس",x:0,y:0,w:7.04,h:3.96,lx:5.0,ly:3.25},
-  {id:"kit",name:"المطبخ والمدخل",size:"مساحة مفتوحة",x:0,y:3.96,w:4.83,h:2.74,lx:3.0,ly:5.0},
-  {id:"bath",name:"الحمام",size:"",x:4.83,y:3.96,w:2.21,h:2.74,lx:5.95,ly:5.6}
+  {id:"kit",name:"المطبخ والمدخل",size:"ممر ضيق ≈ 1.6 م",x:0,y:3.96,w:5.44,h:1.6,lx:4.35,ly:4.3},
+  {id:"bath",name:"الحمام",size:"",x:5.44,y:3.96,w:1.6,h:1.6,lx:6.24,ly:5.9}
 ];
 var ITEMS=[
   {room:"main",name:"موكيت",note:"4 × 4 م تقريباً، يغطي معظم أرضية الغرفة",st:"ok",shape:"rug",x:1.25,y:.05,w:4,h:3.75},
@@ -145,16 +145,16 @@ var ITEMS=[
   {room:"main",name:"كنبة بنية",note:"في الزاوية اليمنى العليا بجانب الجدار",st:"ok",x:6.15,y:.05,w:.85,h:.85,lbl:"كنبة"},
   {room:"main",name:"دولاب غرفة نوم",note:"على الجدار الأيمن، مستعمل",st:"used",x:6.4,y:1.1,w:.6,h:1.8,lbl:"دولاب"},
   {room:"main",name:"مكيف ثانٍ",note:"ذكرته في الوصف، ولم أجد له موضعاً في رسمك",st:"check",noshape:true},
-  {room:"kit",name:"ثلاجة",note:"خارج المطبخ قرب المدخل",st:"ok",x:.05,y:4.1,w:.65,h:.65,lbl:"ثلاجة"},
-  {room:"kit",name:"طاولة تحضير",note:"على جدار المطبخ العلوي، يلزم تأكيد وجودها",st:"check",x:2.9,y:4.02,w:.9,h:.5,lbl:"طاولة"},
-  {room:"kit",name:"دولاب مطبخ علوي وسفلي",note:"المستطيل الكبير في رسمك، مستعمل",st:"used",x:2.5,y:6.05,w:1.1,h:.62,lbl:"دولاب"},
-  {room:"kit",name:"موقد غاز",note:"المستطيل الصغير داخل المستطيل في رسمك، يلزم تأكيده",st:"check",x:4.1,y:6.05,w:.65,h:.62,lbl:"موقد"},
-  {room:"kit",name:"أسطوانة غاز",note:"بين الدولاب والموقد",st:"new",shape:"c",x:3.85,y:6.42,r:.17},
-  {room:"kit",name:"منظم غاز + ليّ غاز",note:"فوق الأسطوانة ويصلها بالموقد",st:"new",x:3.7,y:5.72,w:.28,h:.3},
-  {room:"bath",name:"غسالة (حوضين)",note:"في الزاوية السفلية اليمنى، كما رسمتها",st:"ok",x:6.25,y:6.05,w:.75,h:.6,lbl:"غسالة"},
-  {room:"bath",name:"مناشف",note:"علّاقة على الجدار الأيسر",st:"new",x:4.88,y:5.4,w:.12,h:.6},
-  {room:"bath",name:"سلة مهملات",note:"أسفل الحمام بعيداً عن الدش",st:"new",shape:"c",x:5.3,y:6.4,r:.14},
-  {room:"bath",name:"فرشاة تنظيف",note:"بجانب المرحاض",st:"new",shape:"c",x:6.3,y:4.9,r:.08}
+  {room:"kit",name:"ثلاجة",note:"خارج المطبخ قرب المدخل، على الجدار الأيسر",st:"ok",x:.05,y:4.05,w:.6,h:.6,lbl:"ثلاجة"},
+  {room:"kit",name:"دولاب مطبخ علوي وسفلي",note:"المستطيل الكبير في رسمك، على الجدار السفلي، مستعمل",st:"used",x:2,y:4.96,w:1.1,h:.58,lbl:"دولاب"},
+  {room:"kit",name:"أسطوانة غاز",note:"بين الدولاب والموقد",st:"new",shape:"c",x:3.3,y:5.33,r:.17},
+  {room:"kit",name:"منظم غاز + ليّ غاز",note:"فوق الأسطوانة ويصلها بالموقد",st:"new",x:3.17,y:4.62,w:.28,h:.28},
+  {room:"kit",name:"موقد غاز",note:"المستطيل الصغير داخل المستطيل في رسمك، يلزم تأكيده",st:"check",x:3.55,y:4.96,w:.6,h:.58,lbl:"موقد"},
+  {room:"kit",name:"طاولة تحضير",note:"بجانب الموقد على الجدار السفلي، يلزم تأكيد وجودها",st:"check",x:4.25,y:4.96,w:.95,h:.58,lbl:"طاولة"},
+  {room:"bath",name:"غسالة (حوضين)",note:"في الزاوية السفلية اليمنى، كما رسمتها",st:"ok",x:6.33,y:5.0,w:.66,h:.52,lbl:"غسالة"},
+  {room:"bath",name:"مناشف",note:"علّاقة على الجدار الأيسر",st:"new",x:5.48,y:4.95,w:.1,h:.5},
+  {room:"bath",name:"سلة مهملات",note:"أسفل الحمام بعيداً عن الدش",st:"new",shape:"c",x:5.88,y:5.38,r:.12},
+  {room:"bath",name:"فرشاة تنظيف",note:"بجانب المرحاض",st:"new",shape:"c",x:6.47,y:4.82,r:.07}
 ];
 var NS="http://www.w3.org/2000/svg";
 function el(t,a,txt){var e=document.createElementNS(NS,t);for(var k in a)e.setAttribute(k,a[k]);if(txt!=null)e.textContent=txt;return e}
@@ -172,22 +172,20 @@ function door(gx1,gy1,gx2,gy2,hx,hy,lx,ly,ax,ay,sweep){
   var rad=Math.hypot(lx-hx,ly-hy)*S;
   svg.appendChild(el("path",{d:"M"+X(lx)+" "+Y(ly)+" A"+rad+" "+rad+" 0 0 "+sweep+" "+X(ax)+" "+Y(ay),fill:"none",stroke:"var(--muted)","stroke-width":1.2,"stroke-dasharray":"4 3"}));
 }
-/* أبواب كما في الرسم */
 door(.1,3.96,1.25,3.96, .1,3.96, .1,2.81, 1.25,3.96, 1);   /* بين الغرفة والمطبخ */
-door(.12,6.7,1,6.7, .12,6.7, .12,5.82, 1,6.7, 1);           /* باب الشقة */
-door(4.83,4,4.83,4.85, 4.83,4, 5.68,4, 4.83,4.85, 1);      /* باب الحمام */
-/* الشباك على الجدار العلوي */
+door(.12,5.56,.95,5.56, .12,5.56, .12,4.73, .95,5.56, 1);   /* باب الشقة */
+door(5.44,4,5.44,4.75, 5.44,4, 6.19,4, 5.44,4.75, 1);      /* باب الحمام */
 svg.appendChild(el("line",{x1:X(2.83),y1:Y(0),x2:X(4.12),y2:Y(0),stroke:"var(--new)","stroke-width":8}));
 svg.appendChild(el("line",{x1:X(2.83),y1:Y(0),x2:X(4.12),y2:Y(0),stroke:"var(--room)","stroke-width":2.5}));
 svg.appendChild(el("text",{x:X(3.47),y:Y(0)-12,class:"fixl"},"شباك (جدار النافذة)"));
-svg.appendChild(el("text",{x:X(.56),y:Y(6.7)+20,class:"fixl"},"باب الشقة"));
+svg.appendChild(el("text",{x:X(.54),y:Y(5.56)+20,class:"fixl"},"باب الشقة"));
 /* تجهيزات الحمام الثابتة على الجدار العلوي: مغسلة، شطّاف، مرحاض */
-fix(5.0,4.0,.5,.4,"مغسلة",16);
-fix(5.8,4.0,.2,.14,"",3);
-svg.appendChild(el("text",{x:X(5.9),y:Y(4.15)+13,class:"fixl"},"شطّاف"));
-fix(6.55,4.0,.4,.7,"مرحاض",14);
-svg.appendChild(el("circle",{cx:X(6.4),cy:Y(5.3),r:8,class:"fix"}));
-svg.appendChild(el("text",{x:X(6.4),y:Y(5.3)+24,class:"fixl"},"مصرف"));
+fix(5.55,4.0,.4,.38,"مغسلة",14);
+fix(6.1,4.0,.18,.12,"",3);
+svg.appendChild(el("text",{x:X(6.19),y:Y(4.12)+13,class:"fixl"},"شطّاف"));
+fix(6.62,4.0,.38,.65,"مرحاض",12);
+svg.appendChild(el("circle",{cx:X(6.1),cy:Y(4.85),r:7,class:"fix"}));
+svg.appendChild(el("text",{x:X(6.1),y:Y(4.85)+20,class:"fixl"},"مصرف"));
 ROOMS.forEach(function(r){
   svg.appendChild(el("text",{x:X(r.lx),y:Y(r.ly),class:"room-name"},r.name));
   if(r.size)svg.appendChild(el("text",{x:X(r.lx),y:Y(r.ly)+17,class:"room-size"},r.size));
