@@ -1,0 +1,254 @@
+<title>مخطط شقة أبو خالد</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Arabic:wght@400;500;600&family=Reem+Kufi:wght@600&display=swap">
+<style>
+/* Layout: مخطط أرضي كبير في الأعلى، ثم مرشّح الحالات، ثم قائمة القطع مجمّعة بحسب الغرفة */
+:root{
+  --bg:#f3f4f2; --fg:#1d2a2c; --muted:#5d6b6d; --line:#d3d8d6;
+  --room:#fbfbf9; --wall:#2b3a3c; --fixture:#c9d0ce; --rug:#e6e0d0;
+  --ok:#2f7d5b; --used:#b7791f; --new:#2b6cb0; --check:#7a8587;
+  --ok-bg:#d7ecdf; --used-bg:#f6e6c6; --new-bg:#d5e5f6; --check-bg:#e6e9e9;
+  --card:#ffffff;
+  --font-body:"IBM Plex Sans Arabic",system-ui,sans-serif;
+  --font-head:"Reem Kufi","IBM Plex Sans Arabic",system-ui,sans-serif;
+}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
+  --bg:#141b1c; --fg:#e4ebe9; --muted:#9aa8a8; --line:#2c3a3b;
+  --room:#1b2425; --wall:#9fb3b1; --fixture:#34423f; --rug:#2a2a22;
+  --ok:#5fc093; --used:#e0b04e; --new:#6fb0ee; --check:#9aa6a7;
+  --ok-bg:#1e3a2e; --used-bg:#3b3015; --new-bg:#1b3149; --check-bg:#2a3333;
+  --card:#1b2425; color-scheme:dark}}
+:root[data-theme="dark"]{
+  --bg:#141b1c; --fg:#e4ebe9; --muted:#9aa8a8; --line:#2c3a3b;
+  --room:#1b2425; --wall:#9fb3b1; --fixture:#34423f; --rug:#2a2a22;
+  --ok:#5fc093; --used:#e0b04e; --new:#6fb0ee; --check:#9aa6a7;
+  --ok-bg:#1e3a2e; --used-bg:#3b3015; --new-bg:#1b3149; --check-bg:#2a3333;
+  --card:#1b2425; color-scheme:dark}
+body{background:var(--bg);color:var(--fg);font-family:var(--font-body);font-size:15px;line-height:1.7;
+  padding-block:28px 48px;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px))}
+.wrap{max-width:1000px;margin:0 auto;display:flex;flex-direction:column;gap:22px}
+h1{font-family:var(--font-head);font-size:clamp(26px,5vw,36px);margin:0;line-height:1.3;text-wrap:balance}
+.sub{color:var(--muted);margin:4px 0 0;max-width:62ch}
+.filters{display:flex;flex-wrap:wrap;gap:8px}
+.chip{font:inherit;display:flex;align-items:center;gap:8px;padding:6px 14px;border-radius:999px;border:1.5px solid var(--line);
+  background:var(--card);color:var(--fg);cursor:pointer}
+.chip:focus-visible{outline:2px solid var(--fg);outline-offset:2px}
+.chip[aria-pressed="false"]{opacity:.45}
+.dot{width:12px;height:12px;border-radius:3px;border:2px solid var(--c);background:var(--cb)}
+.dot.dashed{border-style:dashed}
+.chip b{font-weight:600}
+.plan{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:10px;overflow-x:auto}
+.plan svg{display:block;width:100%;min-width:560px;height:auto}
+svg text{font-family:var(--font-body);fill:var(--fg)}
+.room-name{font-size:17px;font-weight:600;text-anchor:middle}
+.room-size{font-size:12px;text-anchor:middle;fill:var(--muted)}
+.it{transition:opacity .15s}
+.it rect,.it circle{fill:var(--cb);stroke:var(--c);stroke-width:2.5}
+.it.check rect,.it.check circle{stroke-dasharray:6 4}
+.it .lbl{font-size:12px;text-anchor:middle;dominant-baseline:middle;fill:var(--fg);font-weight:500}
+.it .num circle{fill:var(--c);stroke:none}
+.it .num text{font-size:11px;font-weight:600;text-anchor:middle;dominant-baseline:central;fill:var(--room)}
+.it.dim{opacity:.12}
+.it.hot rect,.it.hot circle{stroke-width:4}
+.fix{fill:var(--fixture);stroke:var(--wall);stroke-width:1.5}
+.fixl{font-size:11px;fill:var(--muted);text-anchor:middle}
+.note{font-size:13px;color:var(--muted);margin:0}
+.rooms{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:14px}
+.room{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:14px 16px;min-width:0}
+.room h2{font-family:var(--font-head);font-size:19px;margin:0 0 8px}
+.room ul{list-style:none;margin:0;padding:0;display:flex;flex-direction:column}
+.room li{display:flex;align-items:center;gap:10px;padding:7px 0;border-top:1px solid var(--line);cursor:default}
+.room li:first-child{border-top:0}
+.room li.dim{opacity:.25}
+.n{flex:none;width:22px;height:22px;border-radius:50%;display:grid;place-items:center;font-size:11px;font-weight:600;background:var(--c);color:var(--room)}
+.t{flex:1;min-width:0}
+.t small{display:block;color:var(--muted);font-size:12.5px;line-height:1.5}
+.tag{flex:none;font-size:12px;padding:1px 9px;border-radius:999px;background:var(--cb);color:var(--c);border:1px solid var(--c)}
+.sum{display:flex;flex-wrap:wrap;gap:8px 22px;color:var(--muted);font-size:14px}
+.sum b{color:var(--fg);font-weight:600}
+</style>
+
+<div class="wrap">
+  <header>
+    <h1>مخطط شقة أبو خالد — جدة</h1>
+    <p class="sub">توزيع القطع الموجودة والناقصة على الغرف. الأبعاد تقديرية ومبنية على الوصف وعلى الفيديو، وتُعدَّل بعد أخذ القياسات الفعلية.</p>
+  </header>
+
+  <div class="filters" id="filters" role="group" aria-label="تصفية حسب الحالة"></div>
+
+  <div class="plan"><svg id="svg" viewBox="0 0 920 720" role="img" aria-label="مخطط أرضي للشقة"></svg></div>
+  <p class="note">الشمال إلى الأعلى. الجدار الغربي (جدار النافذة) على اليسار. الخط المتقطع يعني أن القطعة تحتاج تأكيداً منك.</p>
+
+  <div class="sum" id="sum"></div>
+  <div class="rooms" id="rooms"></div>
+</div>
+
+<script>
+var S=100,OX=40,OY=40;
+var X=function(m){return OX+m*S},Y=function(m){return OY+m*S};
+var STATUS={
+  ok:{name:"موجودة",c:"var(--ok)",cb:"var(--ok-bg)"},
+  used:{name:"ناقصة — مستعملة",c:"var(--used)",cb:"var(--used-bg)"},
+  new:{name:"ناقصة — جديدة",c:"var(--new)",cb:"var(--new-bg)"},
+  check:{name:"للتأكد",c:"var(--check)",cb:"var(--check-bg)"}
+};
+var ROOMS=[
+  {id:"bed",name:"غرفة النوم",size:"≈ 4.2 × 4.2 م",x:0,y:0,w:4.2,h:4.2,lx:2.2,ly:3.75},
+  {id:"liv",name:"المعيشة",size:"≈ 4.2 × 4.2 م",x:4.2,y:0,w:4.2,h:4.2,lx:6.3,ly:2.9},
+  {id:"kit",name:"المطبخ",size:"≈ 2.6 × 2.2 م",x:0,y:4.2,w:2.6,h:2.2,lx:1.65,ly:5.4},
+  {id:"hall",name:"المدخل",size:"≈ 3 × 2.2 م",x:2.6,y:4.2,w:3,h:2.2,lx:4.05,ly:5.3},
+  {id:"bath",name:"الحمام",size:"≈ 2.8 × 2.2 م",x:5.6,y:4.2,w:2.8,h:2.2,lx:6.75,ly:5.3}
+];
+/* shape: r = مستطيل، c = دائرة. الأبعاد بالمتر */
+var ITEMS=[
+  {room:"bed",name:"موكيت",note:"4 × 4 م، موجود",st:"ok",shape:"rug",x:.1,y:.1,w:4,h:4},
+  {room:"bed",name:"سرير مزدوج + مرتبة",note:"رأس السرير على الجدار الغربي تحت النافذة",st:"ok",x:.05,y:1.3,w:2,h:1.6,lbl:"سرير"},
+  {room:"bed",name:"كمودينو",note:"واحد فقط، بجانب السرير",st:"ok",x:.05,y:.78,w:.45,h:.42},
+  {room:"bed",name:"دولاب غرفة نوم",note:"على الجدار الشرقي، مستعمل",st:"used",x:3.55,y:.5,w:.6,h:1.8,lbl:"دولاب"},
+  {room:"bed",name:"مكيف",note:"مستعمل، شباك أو سبيلت في فتحة الجدار الشمالي",st:"used",x:2.8,y:.04,w:.8,h:.22,lbl:""},
+  {room:"liv",name:"كنبة",note:"على الجدار الشمالي",st:"ok",x:5.2,y:.4,w:1.9,h:.85,lbl:"كنبة"},
+  {room:"liv",name:"كرسي",note:"على الجدار الشرقي",st:"ok",x:7.55,y:1.5,w:.75,h:.75,lbl:"كرسي"},
+  {room:"liv",name:"مكيف",note:"مستعمل، مقابل الكنبة",st:"used",x:6,y:.04,w:.8,h:.22},
+  {room:"kit",name:"دولاب مطبخ علوي وسفلي",note:"مستعمل أو ناقص أجزاء",st:"used",x:.05,y:4.25,w:2.5,h:.55,lbl:"دولاب مطبخ"},
+  {room:"kit",name:"موقد غاز",note:"لم يُذكر في القائمة، يلزم تأكيد وجوده",st:"check",x:.05,y:4.9,w:.6,h:.6,lbl:"موقد"},
+  {room:"kit",name:"طاولة تحضير",note:"لم تُذكر في القائمة، يلزم تأكيد وجودها",st:"check",x:.05,y:5.6,w:.6,h:.75,lbl:"طاولة"},
+  {room:"kit",name:"منظم غاز + ليّ غاز",note:"بين الأسطوانة والموقد",st:"new",x:.72,y:5.1,w:.28,h:.3},
+  {room:"kit",name:"أسطوانة غاز",note:"بجانب الموقد، بعيداً عن الباب",st:"new",shape:"c",x:1.05,y:5.95,r:.2},
+  {room:"hall",name:"ثلاجة",note:"خارج المطبخ، بجوار المدخل",st:"ok",x:2.7,y:5.72,w:.65,h:.65,lbl:"ثلاجة"},
+  {room:"bath",name:"غسالة (حوضين)",note:"في الزاوية بعيداً عن الدش وعن مجال فتح الباب",st:"ok",x:5.65,y:5.8,w:.8,h:.55,lbl:"غسالة"},
+  {room:"bath",name:"مناشف",note:"علّاقة على الجدار الشمالي",st:"new",x:6.3,y:4.25,w:.65,h:.14},
+  {room:"bath",name:"سلة مهملات",note:"بجانب المرحاض",st:"new",shape:"c",x:7.05,y:6.15,r:.14},
+  {room:"bath",name:"فرشاة تنظيف",note:"بجانب المرحاض",st:"new",shape:"c",x:7.97,y:6.25,r:.1}
+];
+var NS="http://www.w3.org/2000/svg";
+function el(t,a,txt){var e=document.createElementNS(NS,t);for(var k in a)e.setAttribute(k,a[k]);if(txt!=null)e.textContent=txt;return e}
+var svg=document.getElementById("svg");
+
+/* الغرف والجدران */
+ROOMS.forEach(function(r){
+  svg.appendChild(el("rect",{x:X(r.x),y:Y(r.y),width:r.w*S,height:r.h*S,fill:"var(--room)",stroke:"var(--wall)","stroke-width":5}));
+});
+/* تجهيزات ثابتة في الحمام */
+function fix(x,y,w,h,label,rx){
+  svg.appendChild(el("rect",{x:X(x),y:Y(y),width:w*S,height:h*S,rx:rx||4,class:"fix"}));
+  if(label)svg.appendChild(el("text",{x:X(x+w/2),y:Y(y+h/2)+4,class:"fixl"},label));
+}
+/* أبواب: فتحة + ورقة + قوس */
+function door(gx1,gy1,gx2,gy2,hx,hy,lx,ly,ax,ay,sweep){
+  svg.appendChild(el("line",{x1:X(gx1),y1:Y(gy1),x2:X(gx2),y2:Y(gy2),stroke:"var(--room)","stroke-width":8}));
+  svg.appendChild(el("line",{x1:X(hx),y1:Y(hy),x2:X(lx),y2:Y(ly),stroke:"var(--wall)","stroke-width":3}));
+  var rad=Math.hypot(lx-hx,ly-hy)*S;
+  svg.appendChild(el("path",{d:"M"+X(lx)+" "+Y(ly)+" A"+rad+" "+rad+" 0 0 "+sweep+" "+X(ax)+" "+Y(ay),fill:"none",stroke:"var(--muted)","stroke-width":1.2,"stroke-dasharray":"4 3"}));
+}
+door(3,4.2,3.9,4.2, 3,4.2, 3,5.1, 3.9,4.2, 0);   /* نوم ← مدخل */
+door(4.6,4.2,5.5,4.2, 5.5,4.2, 5.5,5.1, 4.6,4.2, 1); /* معيشة ← مدخل */
+door(5.6,4.8,5.6,5.6, 5.6,4.8, 6.4,4.8, 5.6,5.6, 1); /* حمام */
+door(3.6,6.4,4.5,6.4, 4.5,6.4, 4.5,5.5, 3.6,6.4, 1); /* باب الشقة */
+svg.appendChild(el("line",{x1:X(2.6),y1:Y(4.9),x2:X(2.6),y2:Y(5.7),stroke:"var(--room)","stroke-width":8})); /* فتحة المطبخ */
+/* نافذة غرفة النوم */
+svg.appendChild(el("line",{x1:X(0),y1:Y(1.2),x2:X(0),y2:Y(3),stroke:"var(--new)","stroke-width":8}));
+svg.appendChild(el("line",{x1:X(0),y1:Y(1.2),x2:X(0),y2:Y(3),stroke:"var(--room)","stroke-width":2.5}));
+svg.appendChild(el("text",{x:X(0)-8,y:Y(2.1),class:"fixl",transform:"rotate(-90 "+(X(0)-8)+" "+Y(2.1)+")"},"نافذة"));
+svg.appendChild(el("text",{x:X(4.45),y:Y(6.4)+26,class:"fixl"},"باب الشقة"));
+
+fix(7.4,4.2,1,.8,"دش",0);
+fix(7.95,5.15,.45,.55,"مغسلة",18);
+fix(7.35,5.75,.5,.6,"مرحاض",16);
+
+/* أسماء الغرف */
+ROOMS.forEach(function(r){
+  svg.appendChild(el("text",{x:X(r.lx),y:Y(r.ly),class:"room-name"},r.name));
+  svg.appendChild(el("text",{x:X(r.lx),y:Y(r.ly)+17,class:"room-size"},r.size));
+});
+
+/* القطع */
+var counter=0,nodes=[];
+var rugs=ITEMS.filter(function(i){return i.shape==="rug"}),rest=ITEMS.filter(function(i){return i.shape!=="rug"});
+rugs.forEach(function(i){
+  var g=el("g",{class:"it "+i.st,"data-st":i.st});
+  g.appendChild(el("rect",{x:X(i.x),y:Y(i.y),width:i.w*S,height:i.h*S,rx:3,style:"fill:var(--rug);stroke:var(--ok);stroke-dasharray:2 5"}));
+  g.appendChild(el("text",{x:X(i.x+i.w/2),y:Y(i.y+.2),class:"room-size"},"موكيت 4 × 4"));
+  svg.appendChild(g);i.node=g;i.n=++counter;
+});
+/* الموكيت يُرسم أولاً، ثم باقي القطع فوقه */
+rest.forEach(function(i){i.n=++counter});
+/* رقم الموكيت أول القائمة، لذا نرتّب الأرقام حسب ظهورها في ITEMS */
+counter=0;ITEMS.forEach(function(i){i.n=++counter});
+
+ITEMS.forEach(function(i){
+  if(i.shape==="rug")return;
+  var s=STATUS[i.st];
+  var g=el("g",{class:"it "+i.st,"data-st":i.st,style:"--c:"+s.c+";--cb:"+s.cb});
+  var cx,cy;
+  if(i.shape==="c"){
+    g.appendChild(el("circle",{cx:X(i.x),cy:Y(i.y),r:i.r*S}));cx=X(i.x);cy=Y(i.y);
+  }else{
+    g.appendChild(el("rect",{x:X(i.x),y:Y(i.y),width:i.w*S,height:i.h*S,rx:4}));
+    cx=X(i.x+i.w/2);cy=Y(i.y+i.h/2);
+    if(i.lbl){
+      var vertical=i.h>i.w*1.6;
+      var t=el("text",{x:cx,y:cy,class:"lbl"},i.lbl);
+      if(vertical)t.setAttribute("transform","rotate(-90 "+cx+" "+cy+")");
+      g.appendChild(t);
+    }
+  }
+  /* شارة الرقم عند الزاوية العلوية */
+  var bx=i.shape==="c"?cx:X(i.x)+(i.lbl||i.w>=.6?10:0)+(i.w<.6?i.w*S/2:0),by=i.shape==="c"?cy-i.r*S-9:Y(i.y)-9;
+  if(i.shape!=="c"&&i.w*S>=60){bx=X(i.x+i.w)-11;}
+  var nb=el("g",{class:"num"});
+  nb.appendChild(el("circle",{cx:bx,cy:by,r:9}));
+  nb.appendChild(el("text",{x:bx,y:by},String(i.n)));
+  g.appendChild(nb);
+  svg.appendChild(g);i.node=g;
+});
+/* المكيفات تحتاج وسماً صغيراً لأنها رفيعة */
+ITEMS.forEach(function(i){
+  if(i.name==="مكيف"){
+    svg.appendChild(el("text",{x:X(i.x+i.w/2),y:Y(i.y)+38,class:"fixl"},"مكيف"));
+  }
+});
+
+/* القائمة بحسب الغرفة */
+var roomsEl=document.getElementById("rooms");
+ROOMS.forEach(function(r){
+  var list=ITEMS.filter(function(i){return i.room===r.id});
+  var card=document.createElement("section");card.className="room";
+  card.innerHTML="<h2>"+r.name+"</h2>";
+  var ul=document.createElement("ul");
+  list.forEach(function(i){
+    var s=STATUS[i.st];
+    var li=document.createElement("li");li.style.setProperty("--c",s.c);li.style.setProperty("--cb",s.cb);li.dataset.st=i.st;
+    li.innerHTML='<span class="n">'+i.n+'</span><span class="t">'+i.name+'<small>'+i.note+'</small></span><span class="tag">'+s.name+'</span>';
+    li.addEventListener("mouseenter",function(){if(i.node)i.node.classList.add("hot")});
+    li.addEventListener("mouseleave",function(){if(i.node)i.node.classList.remove("hot")});
+    i.li=li;ul.appendChild(li);
+  });
+  card.appendChild(ul);roomsEl.appendChild(card);
+});
+
+/* المرشّحات والملخص */
+var active={ok:true,used:true,new:true,check:true};
+var fEl=document.getElementById("filters"),sumEl=document.getElementById("sum");
+Object.keys(STATUS).forEach(function(k){
+  var s=STATUS[k],n=ITEMS.filter(function(i){return i.st===k}).length;
+  var b=document.createElement("button");b.type="button";b.className="chip";b.setAttribute("aria-pressed","true");
+  b.style.setProperty("--c",s.c);b.style.setProperty("--cb",s.cb);
+  b.innerHTML='<span class="dot'+(k==="check"?" dashed":"")+'"></span>'+s.name+' <b>'+n+'</b>';
+  b.addEventListener("click",function(){
+    active[k]=!active[k];b.setAttribute("aria-pressed",String(active[k]));apply();
+  });
+  fEl.appendChild(b);
+});
+function apply(){
+  ITEMS.forEach(function(i){
+    var on=active[i.st];
+    if(i.node)i.node.classList.toggle("dim",!on);
+    if(i.li)i.li.classList.toggle("dim",!on);
+  });
+}
+var total=ITEMS.length;
+sumEl.innerHTML='<span>إجمالي القطع: <b>'+total+'</b></span><span>تحتاج شراء: <b>'+
+  ITEMS.filter(function(i){return i.st==="used"||i.st==="new"}).length+'</b></span><span>للتأكد: <b>'+
+  ITEMS.filter(function(i){return i.st==="check"}).length+'</b></span>';
+</script>
