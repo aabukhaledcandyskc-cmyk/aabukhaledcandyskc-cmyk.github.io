@@ -119,3 +119,11 @@ export function parsePayments(rows, { today } = {}) {
   for (const p of payments) { if (seen.has(p.key)) duplicateKeys.push(p.key); seen.add(p.key); }
   return { payments, rejected, phantom, zeroAmount, duplicateKeys, controlTotals };
 }
+
+// Decide which Daftra report a sheet is, so one "import" button can take both files.
+export function detectKind(rows) {
+  const has = (...needles) => rows.slice(0, 15).some((r) => needles.every((n) => r.some((c) => norm(c).includes(n))));
+  if (has('المعرف', 'رقم الفاتورة')) return 'payments';
+  if (has('التاريخ', 'الإجمالي')) return 'invoices';
+  return null;
+}
