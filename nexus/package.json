@@ -1,0 +1,10 @@
+{
+  "name": "nexus-dashboard",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "check": "node --check src/csv.js && node --check src/shared.js && node --check src/daftra.js",
+    "test": "node --test \"tests/*.test.js\""
+  }
+}
