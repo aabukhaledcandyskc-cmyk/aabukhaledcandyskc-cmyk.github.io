@@ -47,6 +47,16 @@ h2{font-size:16px;margin:18px 0 8px}h3{font-size:14px;margin:14px 0 6px}
 .tgrid input{width:130px}
 @media print{header .bar,.bar,.tabs,.notice,.tbar button,button{display:none!important}body{background:#fff;color:#000}.card,.tablewrap{break-inside:avoid;border-color:#bbb}.pane{display:block!important}.printonly{display:block!important}}
 .printonly{display:none}
+.sortable{cursor:pointer;user-select:none}.sortable:hover{color:var(--text)}
+#reps thead th{background:color-mix(in srgb,var(--accent) 7%,var(--card));text-align:center;vertical-align:middle;border-bottom:1px solid var(--line)}
+#reps thead th:first-child{text-align:start}#reps thead tr:nth-child(1) th{top:0}#reps thead tr:nth-child(2) th{top:37px}
+#reps th.grp{border-bottom:1px solid var(--line);color:var(--text)}
+#reps tfoot td{background:color-mix(in srgb,var(--accent) 7%,var(--card));font-weight:700;border-top:2px solid var(--line);position:sticky;bottom:0}
+#reps td.n{text-align:center}
+button.link{background:none;border:0;padding:0;color:var(--accent);cursor:pointer;text-decoration:underline dotted;font:inherit}
+button.link:hover{text-decoration:underline}
+th:focus-visible,button.link:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.repwrap{max-height:70vh;overflow:auto}
 </style>
 </head>
 <body>
@@ -92,7 +102,7 @@ h2{font-size:16px;margin:18px 0 8px}h3{font-size:14px;margin:14px 0 6px}
     </div>
     <div id="alerts"></div>
     <h2>ملخص أداء المناديب</h2>
-    <div class="tablewrap"><table id="reps"></table></div>
+    <div class="tablewrap repwrap"><table id="reps"></table></div>
     <h2>آخر عمليات الاستيراد</h2>
     <div class="tablewrap"><table id="log"></table></div>
   </section>
@@ -130,6 +140,10 @@ h2{font-size:16px;margin:18px 0 8px}h3{font-size:14px;margin:14px 0 6px}
   </section>
 </main>
 
+<dialog id="repCard" style="width:min(900px,96vw)">
+  <div style="display:flex;justify-content:space-between;align-items:center;gap:8px"><div><h2 style="margin:0" id="repCardTitle"></h2><div class="muted" id="repCardMeta"></div></div><button class="ghost" id="repCardClose">إغلاق</button></div>
+  <div id="repCardBody" style="max-height:72vh;overflow:auto;margin-top:8px"></div>
+</dialog>
 <dialog id="dlg">
   <h2 style="margin-top:0">استيراد ملفات دفترة</h2>
   <p class="muted">اختر ملف الفواتير وملف المدفوعات (والأستاذ العام للمطابقة إن أردت) معاً، CSV أو Excel. يتعرف النظام على نوع كل ملف، ويمكن إعادة استيراد نفس الملف دون تكرار.</p>

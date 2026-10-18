@@ -29,13 +29,49 @@ export function computeKpis(sales, payments) {
 
 export function repSummary(sales, payments) {
   const by = new Map();
-  const row = (rep) => { if (!by.has(rep)) by.set(rep, { rep, sales: 0, paid: 0, receipts: 0, unpaid: 0, returns: 0, invoices: 0 }); return by.get(rep); };
-  for (const s of sales) { const r = row(s.rep); r.sales += s.total; r.paid += s.paid; r.unpaid += s.unpaid; r.returns += s.returns; if (s.total > 0) r.invoices++; }
+  const row = (rep) => { if (!by.has(rep)) by.set(rep, { rep, sales: 0, gross: 0, paid: 0, receipts: 0, unpaid: 0, returns: 0, invoices: 0 }); return by.get(rep); };
+  for (const s of sales) {
+    const r = row(s.rep);
+    r.sales += s.total; r.paid += s.paid; r.unpaid += s.unpaid; r.returns += s.returns;
+    if (s.total > 0) { r.invoices++; r.gross += s.total; } // gross = real invoices only, so credit notes do not shrink the denominator
+  }
   for (const p of payments) row(p.rep).receipts += p.amount;
   return [...by.values()]
     .filter((r) => !(r.rep === UNKNOWN_REP && r.sales === 0))
-    .map((r) => ({ ...r, paidPct: r.sales > 0 ? (r.paid / r.sales) * 100 : 0 }))
+    .map((r) => withRates(r))
     .sort((a, b) => b.sales - a.sales);
+}
+
+// paidPct = paid / total sales; returnRate = returns / gross invoiced sales (null when nothing was invoiced).
+export const withRates = (r) => ({
+  ...r,
+  paidPct: r.sales > 0 ? (r.paid / r.sales) * 100 : 0,
+  returnRate: r.gross > 0 ? (r.returns / r.gross) * 100 : null,
+});
+
+export function totalsRow(reps) {
+  const t = reps.reduce((a, r) => ({ sales: a.sales + r.sales, gross: a.gross + r.gross, paid: a.paid + r.paid, receipts: a.receipts + r.receipts, unpaid: a.unpaid + r.unpaid, returns: a.returns + r.returns, invoices: a.invoices + r.invoices }),
+    { sales: 0, gross: 0, paid: 0, receipts: 0, unpaid: 0, returns: 0, invoices: 0 });
+  return withRates({ rep: 'الإجمالي', ...t });
+}
+
+// Stable sort for the summary table; text sorts in Arabic collation, nulls always last.
+export function sortRows(rows, key, dir = 'desc') {
+  const mul = dir === 'asc' ? 1 : -1;
+  return [...rows].sort((a, b) => {
+    const x = a[key], y = b[key];
+    if (x === null || x === undefined) return (y === null || y === undefined) ? 0 : 1;
+    if (y === null || y === undefined) return -1;
+    return (typeof x === 'string' ? x.localeCompare(y, 'ar') : x - y) * mul;
+  });
+}
+
+export function monthlyBreakdown(sales, payments) {
+  const by = new Map();
+  const row = (m) => { if (!by.has(m)) by.set(m, { month: m, sales: 0, paid: 0, receipts: 0, unpaid: 0, invoices: 0 }); return by.get(m); };
+  for (const s of sales) { const r = row(s.date.slice(0, 7)); r.sales += s.total; r.paid += s.paid; r.unpaid += s.unpaid; if (s.total > 0) r.invoices++; }
+  for (const p of payments) row(p.date.slice(0, 7)).receipts += p.amount;
+  return [...by.values()].sort((a, b) => (a.month < b.month ? -1 : 1));
 }
 
 export const WEEK_START = 0; // 0 = Sunday, 6 = Saturday

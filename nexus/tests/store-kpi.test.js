@@ -111,3 +111,30 @@ test('aging buckets only positive open balances; customers with credit balance e
   assert.deepEqual(r.map((c) => c.customer), ['ع1', 'ع3']);
   assert.deepEqual([r[0].net, r[0].b0, r[0].b30, r[0].b60, r[0].b90, r[0].open], [1800, 1000, 500, 200, 100, 4]);
 });
+
+import { totalsRow, sortRows, monthlyBreakdown, withRates } from '../src/kpi.js';
+test('return rate = returns / gross invoiced sales (credit notes excluded from the base)', () => {
+  const r = repSummary(sales, pays).find((x) => x.rep === 'أ');
+  assert.equal(r.gross, 15000);
+  assert.equal(r.returnRate, (1000 / 15000) * 100);
+  const none = withRates({ rep: 'x', sales: 0, gross: 0, paid: 0, receipts: 0, unpaid: 0, returns: 0, invoices: 0 });
+  assert.equal(none.returnRate, null);
+});
+test('totals row equals the KPI cards for the same data', () => {
+  const reps = repSummary(sales, pays);
+  const t = totalsRow(reps);
+  const k = computeKpis(sales, pays);
+  assert.deepEqual([t.sales, t.paid, t.unpaid, t.returns, t.receipts, t.invoices], [k.sales, k.paid, k.unpaid, k.returns, k.receipts, k.invoiceCount]);
+});
+test('sorting: numeric both directions, Arabic text, nulls last', () => {
+  const rows = [{ rep: 'ب', v: 2 }, { rep: 'أ', v: 10 }, { rep: 'ج', v: null }, { rep: 'د', v: 5 }];
+  assert.deepEqual(sortRows(rows, 'v', 'desc').map((r) => r.rep), ['أ', 'د', 'ب', 'ج']);
+  assert.deepEqual(sortRows(rows, 'v', 'asc').map((r) => r.rep), ['ب', 'د', 'أ', 'ج']);
+  assert.deepEqual(sortRows(rows, 'rep', 'asc').map((r) => r.rep), ['أ', 'ب', 'ج', 'د']);
+});
+test('monthly breakdown groups by YYYY-MM and sorts ascending', () => {
+  const m = monthlyBreakdown(sales, pays);
+  assert.deepEqual(m.map((x) => x.month), ['2026-01', '2026-02']);
+  assert.deepEqual([m[0].sales, m[0].receipts, m[0].invoices], [15000, 7000, 2]);
+  assert.deepEqual([m[1].sales, m[1].receipts, m[1].invoices], [1000, -500, 1]);
+});

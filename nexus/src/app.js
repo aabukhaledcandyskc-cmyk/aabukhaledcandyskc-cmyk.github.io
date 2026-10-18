@@ -2,7 +2,7 @@ import { parseCsv } from './csv.js';
 import { parseInvoices, parsePayments, detectKind } from './daftra.js';
 import { browserStore } from './store.js';
 import {
-  computeKpis, repSummary, filterByPeriod, weeklyTrend, allowedReps, restrictToReps,
+  computeKpis, repSummary, totalsRow, sortRows, monthlyBreakdown, filterByPeriod, weeklyTrend, allowedReps, restrictToReps,
   monthsInRange, targetsByRep, targetKey, progressPct, agingByCustomer,
 } from './kpi.js';
 import { toCents, fromCents } from './shared.js';
@@ -23,7 +23,7 @@ const SYSTEM_KEY = '__system';
 const st = {
   sales: [], payments: [], meta: new Map(), targets: [], system: { name: 'NEXUS Dashboard', logo: '' },
   sel: { reps: new Set(), regions: new Set(), positions: new Set(), statuses: new Set() }, ledger: null, theme: null,
-  tab: 'summary', invLimit: 300, payLimit: 300, pending: [], charts: {},
+  tab: 'summary', repSort: { key: 'sales', dir: 'desc' }, invLimit: 300, payLimit: 300, pending: [], charts: {},
 };
 
 $('version').textContent = `الإصدار ${NEXUS_VERSION}`;
@@ -159,17 +159,67 @@ function render() {
   ].map(([l, t, a]) => `<div class="card"><div class="l">${l}</div><div class="s">المستهدف ${money(t)} — الفعلي ${money(a)}</div>${progress(progressPct(a, t))}</div>`).join('') : '';
 
   const reps = repSummary(c.s, c.p);
-  $('reps').innerHTML = `<tr><th>المندوب</th><th>المنطقة</th><th>المنصب</th><th class="n">المبيعات</th><th class="n">التحصيل</th><th class="n">نسبة التحصيل</th><th class="n">المقبوضات</th><th class="n">غير المدفوع</th><th class="n">المرتجعات</th><th class="n">الفواتير</th><th>تحقيق هدف المبيعات</th><th>تحقيق هدف التحصيل</th></tr>` +
-    (reps.map((r) => {
-      const m = st.meta.get(r.rep) ?? {}, t = tmap.get(r.rep);
-      return `<tr><td>${escapeHtml(r.rep)}</td><td>${escapeHtml(m.region ?? '')}</td><td>${escapeHtml(m.position ?? '')}</td><td class="n">${money(r.sales)}</td><td class="n">${money(r.paid)}</td><td class="n ${r.paidPct < 50 ? 'low' : ''}">${r.paidPct.toFixed(1)}%</td><td class="n">${money(r.receipts)}</td><td class="n">${money(r.unpaid)}</td><td class="n">${money(r.returns)}</td><td class="n">${int(r.invoices)}</td><td>${progress(t ? progressPct(r.sales, t.sales) : null)}</td><td>${progress(t ? progressPct(r.receipts, t.collection) : null)}</td></tr>`;
-    }).join('') || '<tr><td colspan="12" class="muted">لا توجد بيانات — استورد ملفات دفترة أولاً</td></tr>');
+  renderRepTable(reps, tmap);
   const low = reps.filter((r) => r.sales > 0 && r.paidPct < 50);
   $('alerts').innerHTML = low.length ? `<div class="notice">تنبيه: نسبة التحصيل أقل من 50% عند: ${low.map((r) => `${escapeHtml(r.rep)} (${r.paidPct.toFixed(1)}%)`).join('، ')}</div>` : '';
   renderCharts(reps, weeklyTrend(c.s, c.p));
   $('rangeInfo').textContent = st.sales.length ? `${int(c.s.length)} صف مبيعات، ${int(c.p.length)} سند ضمن الفلاتر` : '';
   $('printTitle').textContent = `${st.system.name} — الفترة من ${c.from} إلى ${c.to}`;
   renderPane(c);
+}
+
+const pctText = (v) => (v === null ? '<span class="muted">—</span>' : `${v.toFixed(1)}%`);
+// Table layout follows Daftra's employee report: a two-level header where «المبيعات» splits into paid / unpaid.
+const REP_COLS = [
+  { key: 'sales', label: 'الإجمالي' }, { key: 'paid', label: 'مدفوعة' }, { key: 'unpaid', label: 'غير مدفوعة' },
+];
+function sortTh(key, label, extra = '') {
+  const on = st.repSort.key === key;
+  const arrow = on ? (st.repSort.dir === 'asc' ? ' ▲' : ' ▼') : '';
+  return `<th class="sortable ${extra}" data-sort="${key}" tabindex="0" role="columnheader" aria-sort="${on ? (st.repSort.dir === 'asc' ? 'ascending' : 'descending') : 'none'}">${label}${arrow}</th>`;
+}
+function renderRepTable(reps, tmap) {
+  const rows = sortRows(reps.map((r) => ({ ...r, ...(st.meta.get(r.rep) ?? {}), tSales: progressPct(r.sales, tmap.get(r.rep)?.sales ?? 0), tColl: progressPct(r.receipts, tmap.get(r.rep)?.collection ?? 0) })), st.repSort.key, st.repSort.dir);
+  const tot = totalsRow(reps);
+  const hasTargets = tmap.size > 0;
+  const line = (r, isTotal) => `<tr class="${isTotal ? 'total' : ''}"><td>${isTotal ? '<b>الإجمالي</b>' : `<button class="link" data-rep="${escapeHtml(r.rep)}" aria-label="بطاقة ${escapeHtml(r.rep)}">${escapeHtml(r.rep)}</button>`}</td>
+    <td class="n">${money(r.sales)}</td><td class="n">${money(r.paid)}</td><td class="n">${money(r.unpaid)}</td><td class="n">${money(r.receipts)}</td>
+    <td class="n ${!isTotal && r.paidPct < 50 ? 'low' : ''}">${r.paidPct.toFixed(1)}%</td><td class="n">${int(r.invoices)}</td><td class="n">${pctText(r.returnRate)}</td>
+    <td>${isTotal ? '' : escapeHtml(r.region ?? '')}</td><td>${isTotal ? '' : escapeHtml(r.position ?? '')}</td>
+    <td>${isTotal ? '' : progress(hasTargets ? r.tSales : null)}</td><td>${isTotal ? '' : progress(hasTargets ? r.tColl : null)}</td></tr>`;
+  $('reps').innerHTML = `<thead>
+    <tr><th rowspan="2" class="sortable" data-sort="rep" tabindex="0" aria-sort="${st.repSort.key === 'rep' ? (st.repSort.dir === 'asc' ? 'ascending' : 'descending') : 'none'}">الموظف / المندوب <span class="muted">(اضغط لعرض البطاقة)</span>${st.repSort.key === 'rep' ? (st.repSort.dir === 'asc' ? ' ▲' : ' ▼') : ''}</th>
+      <th colspan="3" class="grp">المبيعات</th>
+      ${sortTh('receipts', 'التحصيلات المسجلة', 'n').replace('<th ', '<th rowspan="2" ')}
+      ${sortTh('paidPct', 'نسبة التحصيل', 'n').replace('<th ', '<th rowspan="2" title="المدفوع من فواتير الفترة ÷ إجمالي المبيعات. التحصيلات المسجلة تشمل سندات فواتير فترات سابقة، لذلك قد تختلف عنه." ')}
+      ${sortTh('invoices', 'عدد الفواتير', 'n').replace('<th ', '<th rowspan="2" ')}
+      ${sortTh('returnRate', 'معدل المرتجعات', 'n').replace('<th ', '<th rowspan="2" title="المرتجعات (مجموع عمود المرتجع الخام) ÷ مبيعات الفواتير الموجبة. قد يظهر سالباً إذا سُجّلت فاتورة المرتجع عند مندوب أو في فترة غير فاتورتها الأصلية." ')}
+      <th colspan="4" class="grp">التصنيف والأهداف</th></tr>
+    <tr>${REP_COLS.map((c) => sortTh(c.key, c.label, 'n sub')).join('')}
+      ${sortTh('region', 'المنطقة', 'sub')}${sortTh('position', 'المنصب', 'sub')}${sortTh('tSales', 'هدف المبيعات', 'sub')}${sortTh('tColl', 'هدف التحصيل', 'sub')}</tr></thead>
+    <tbody>${rows.map((r) => line(r, false)).join('') || '<tr><td colspan="12" class="muted">لا توجد بيانات — استورد ملفات دفترة أولاً</td></tr>'}</tbody>
+    ${rows.length ? `<tfoot>${line(tot, true)}</tfoot>` : ''}`;
+}
+
+function openRepCard(rep) {
+  const c = current();
+  const s = c.s.filter((r) => r.rep === rep), p = c.p.filter((r) => r.rep === rep);
+  const k = computeKpis(s, p), m = st.meta.get(rep) ?? {};
+  const gross = s.filter((x) => x.total > 0).reduce((a, x) => a + x.total, 0);
+  const aging = agingByCustomer(s, c.to || today()).slice(0, 10);
+  const recent = [...s].sort((a, b) => (a.date < b.date ? 1 : -1)).slice(0, 15);
+  const card = (l, v, sub = '') => `<div class="card"><div class="l">${l}</div><div class="v" style="font-size:18px">${v}</div><div class="s">${sub}</div></div>`;
+  $('repCardTitle').textContent = rep;
+  $('repCardMeta').textContent = [m.region, m.position].filter(Boolean).join(' — ') + ` — الفترة ${c.from || '—'} إلى ${c.to || '—'}`;
+  $('repCardBody').innerHTML = `<div class="grid">${[
+    card('إجمالي المبيعات', money(k.sales)), card('مدفوعة', money(k.paid), `${k.paidPct.toFixed(1)}%`), card('غير مدفوعة', money(k.unpaid)),
+    card('التحصيلات المسجلة', money(k.receipts)), card('عدد الفواتير', int(k.invoiceCount)), card('العملاء النشطون', int(k.activeCustomers)),
+    card('معدل المرتجعات', gross > 0 ? `${((k.returns / gross) * 100).toFixed(1)}%` : '—', `المرتجعات ${money(k.returns)}`),
+  ].join('')}</div>
+  <h3>الأداء الشهري</h3><div class="tablewrap" style="max-height:240px;overflow:auto"><table><tr><th>الشهر</th><th class="n">المبيعات</th><th class="n">مدفوعة</th><th class="n">غير مدفوعة</th><th class="n">المقبوضات</th><th class="n">الفواتير</th></tr>${monthlyBreakdown(s, p).map((x) => `<tr><td>${x.month}</td><td class="n">${money(x.sales)}</td><td class="n">${money(x.paid)}</td><td class="n">${money(x.unpaid)}</td><td class="n">${money(x.receipts)}</td><td class="n">${int(x.invoices)}</td></tr>`).join('')}</table></div>
+  <h3>أعلى 10 عملاء مدينية</h3><div class="tablewrap"><table><tr><th>العميل</th><th class="n">الرصيد</th><th class="n">أكثر من 90 يوماً</th></tr>${aging.map((x) => `<tr><td>${escapeHtml(x.customer)}</td><td class="n">${money(x.net)}</td><td class="n ${x.b90 ? 'low' : ''}">${money(x.b90)}</td></tr>`).join('') || '<tr><td colspan="3" class="muted">لا أرصدة مدينة</td></tr>'}</table></div>
+  <h3>آخر 15 فاتورة</h3><div class="tablewrap"><table><tr><th>التاريخ</th><th>الرقم</th><th>العميل</th><th class="n">الإجمالي</th><th class="n">غير المدفوع</th></tr>${recent.map((x) => `<tr><td>${x.date}</td><td>${escapeHtml(x.number)}</td><td>${escapeHtml(x.customer)}</td><td class="n">${money(x.total)}</td><td class="n">${money(x.unpaid)}</td></tr>`).join('')}</table></div>`;
+  $('repCard').showModal();
 }
 
 function renderCharts(reps, trend) {
@@ -374,6 +424,15 @@ $('from').onchange = $('to').onchange = render;
 $('allBtn').onclick = () => { const d = [...st.sales, ...st.payments].map((r) => r.date).sort(); $('from').value = d[0] ?? ''; $('to').value = d.at(-1) ?? ''; render(); };
 $('clearBtn').onclick = async () => { if (confirm('حذف الفواتير والسندات المحفوظة في هذا المتصفح؟ (الأهداف والإعدادات تبقى). تأكد من أخذ نسخة احتياطية أولاً.')) { await browserStore.clear(); await refresh(true); } };
 $('printBtn').onclick = () => window.print();
+function toggleSort(th) {
+  const key = th?.dataset.sort; if (!key) return;
+  const textual = ['rep', 'region', 'position'].includes(key);
+  st.repSort = st.repSort.key === key ? { key, dir: st.repSort.dir === 'desc' ? 'asc' : 'desc' } : { key, dir: textual ? 'asc' : 'desc' };
+  render();
+}
+$('reps').onclick = (e) => { const b = e.target.closest('[data-rep]'); if (b) return openRepCard(b.dataset.rep); toggleSort(e.target.closest('th[data-sort]')); };
+$('reps').onkeydown = (e) => { if ((e.key === 'Enter' || e.key === ' ') && e.target.matches('th[data-sort]')) { e.preventDefault(); toggleSort(e.target); } };
+$('repCardClose').onclick = () => $('repCard').close();
 const THEME_KEY = 'nexus-theme';
 const setTheme = (t) => { document.documentElement.dataset.theme = t; try { localStorage.setItem(THEME_KEY, t); } catch { /* private mode */ } };
 try { const t = localStorage.getItem(THEME_KEY); if (t) document.documentElement.dataset.theme = t; } catch { /* ignore */ }
