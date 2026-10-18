@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { mergeRecords } from '../src/store.js';
-import { computeKpis, repSummary, filterByPeriod } from '../src/kpi.js';
+import { computeKpis, repSummary, filterByPeriod, weekStart, weeklyTrend, filterByReps } from '../src/kpi.js';
 import { detectKind } from '../src/daftra.js';
 import { parseCsv } from '../src/csv.js';
 
@@ -51,4 +51,24 @@ test('file kind detection', () => {
   assert.equal(detectKind(parseCsv('"رقم","التاريخ","العميل","الإجمالي (SAR)"')), 'invoices');
   assert.equal(detectKind(parseCsv('"المعرف","رقم الفاتورة","التاريخ","الإجمالي (SAR)"')), 'payments');
   assert.equal(detectKind(parseCsv('a,b')), null);
+});
+
+test('weeks start on Sunday by default and Saturday when configured', () => {
+  assert.equal(weekStart('2026-10-18'), '2026-10-18'); // a Sunday
+  assert.equal(weekStart('2026-10-17'), '2026-10-11'); // Saturday belongs to the previous Sunday week
+  assert.equal(weekStart('2026-10-17', 6), '2026-10-17');
+  assert.equal(weekStart('2026-10-23'), '2026-10-18');
+  assert.equal(weekStart('2026-01-01'), '2025-12-28'); // crosses a year boundary
+});
+test('weekly trend groups sales and receipts and sorts by week', () => {
+  const t = weeklyTrend(
+    [{ date: '2026-10-19', total: 100 }, { date: '2026-10-11', total: 50 }, { date: '2026-10-20', total: 25 }],
+    [{ date: '2026-10-21', amount: 70 }, { date: '2026-10-05', amount: 5 }]);
+  assert.deepEqual(t.map((x) => x.week), ['2026-10-04', '2026-10-11', '2026-10-18']);
+  assert.deepEqual(t.map((x) => [x.sales, x.receipts]), [[0, 5], [50, 0], [125, 70]]);
+});
+test('rep filter: empty selection means all, otherwise only chosen reps', () => {
+  assert.equal(filterByReps(sales, new Set()).length, 4);
+  assert.equal(filterByReps(sales, new Set(['أ'])).length, 2);
+  assert.equal(computeKpis(filterByReps(sales, new Set(['ب'])), filterByReps(pays, new Set(['ب']))).receipts, -500);
 });

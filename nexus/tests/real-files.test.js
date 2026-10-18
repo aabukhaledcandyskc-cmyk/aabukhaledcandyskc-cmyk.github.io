@@ -73,3 +73,30 @@ test('summary printout', { skip }, () => {
     reps: new Set(inv.sales.map((s) => s.rep)).size,
   }));
 });
+
+// ---- ledger reconciliation (the strongest independent check) ----
+import { parseLedger, reconcile } from '../src/ledger.js';
+let rec;
+test('ledger: load and reconcile', { skip }, () => {
+  const led = parseLedger(parseCsv(fs.readFileSync(pick(/48ce8132/), 'utf8')));
+  rec = reconcile(inv.sales, pay.payments, led);
+  console.log(JSON.stringify({ ...rec, invoices: { ...rec.invoices, notInFile: rec.invoices.notInFile.length, amountMismatches: rec.invoices.amountMismatches.length } }));
+});
+test('ledger: every ledger invoice exists in the invoice file with the same amount', { skip }, () => {
+  assert.equal(rec.invoices.notInFile.length, 0);
+  assert.equal(rec.invoices.amountMismatches.length, 0);
+});
+test('ledger: invoices absent from it are fully paid cash sales', { skip }, () => {
+  assert.equal(rec.invoices.notInLedger.unpaid, 0);
+  assert.equal(rec.invoices.notInLedger.paid, rec.invoices.notInLedger.total);
+});
+test('ledger: credit and debit notes match to the halala (±0.02)', { skip }, () => {
+  assert.ok(Math.abs(rec.creditNotes.file - rec.creditNotes.ledger) <= 2, JSON.stringify(rec.creditNotes));
+  assert.ok(Math.abs(rec.debitNotes.file - rec.debitNotes.ledger) <= 2, JSON.stringify(rec.debitNotes));
+});
+test('ledger: payments reconcile within 5 SAR over ~9,000 receipts', { skip }, () => {
+  assert.ok(Math.abs(rec.payments.diff) <= 500, JSON.stringify(rec.payments));
+});
+test('ledger: closing balance reconciles within 0.05 SAR', { skip }, () => {
+  assert.ok(Math.abs(rec.balance.diff) <= 5, JSON.stringify(rec.balance));
+});

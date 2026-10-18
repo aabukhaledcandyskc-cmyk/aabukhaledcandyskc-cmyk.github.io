@@ -37,3 +37,25 @@ export function repSummary(sales, payments) {
     .map((r) => ({ ...r, paidPct: r.sales > 0 ? (r.paid / r.sales) * 100 : 0 }))
     .sort((a, b) => b.sales - a.sales);
 }
+
+export const WEEK_START = 0; // 0 = Sunday, 6 = Saturday
+
+export function weekStart(iso, start = WEEK_START) {
+  const d = new Date(iso + 'T00:00:00Z');
+  const back = (d.getUTCDay() - start + 7) % 7;
+  d.setUTCDate(d.getUTCDate() - back);
+  return d.toISOString().slice(0, 10);
+}
+
+export function weeklyTrend(sales, payments, start = WEEK_START) {
+  const by = new Map();
+  const row = (w) => { if (!by.has(w)) by.set(w, { week: w, sales: 0, receipts: 0 }); return by.get(w); };
+  for (const s of sales) row(weekStart(s.date, start)).sales += s.total;
+  for (const p of payments) row(weekStart(p.date, start)).receipts += p.amount;
+  return [...by.values()].sort((a, b) => (a.week < b.week ? -1 : 1));
+}
+
+// Empty set = no restriction (all reps).
+export function filterByReps(rows, reps) {
+  return reps && reps.size ? rows.filter((r) => reps.has(r.rep)) : rows;
+}

@@ -1,7 +1,7 @@
 import { parseCsv } from './csv.js';
 import { parseInvoices, parsePayments, detectKind } from './daftra.js';
 import { browserStore } from './store.js';
-import { computeKpis, repSummary, filterByPeriod } from './kpi.js';
+import { computeKpis, repSummary, filterByPeriod, filterByReps, weeklyTrend } from './kpi.js';
 import { fromCents } from './shared.js';
 import { NEXUS_VERSION } from './config.js';
 
@@ -11,6 +11,8 @@ const money = (c) => (c / 100).toLocaleString('en-US', { minimumFractionDigits: 
 const today = () => new Date().toISOString().slice(0, 10);
 
 let sales = [], payments = [], pending = [];
+const selectedReps = new Set(); // empty = all
+let repChart = null, trendChart = null;
 
 $('version').textContent = `الإصدار ${NEXUS_VERSION}`;
 
@@ -77,7 +79,8 @@ async function save() {
 
 function render() {
   const f = $('from').value, t = $('to').value;
-  const s = filterByPeriod(sales, { from: f, to: t }), p = filterByPeriod(payments, { from: f, to: t });
+  const s = filterByReps(filterByPeriod(sales, { from: f, to: t }), selectedReps);
+  const p = filterByReps(filterByPeriod(payments, { from: f, to: t }), selectedReps);
   const k = computeKpis(s, p);
   const card = (l, v, sub = '') => `<div class="card"><div class="l">${l}</div><div class="v">${v}</div><div class="s">${sub}</div></div>`;
   $('kpis').innerHTML = [
@@ -94,7 +97,42 @@ function render() {
   $('reps').innerHTML = `<tr><th>المندوب</th><th class="n">المبيعات</th><th class="n">التحصيل</th><th class="n">نسبة التحصيل</th><th class="n">المقبوضات</th><th class="n">غير المدفوع</th><th class="n">المرتجعات</th><th class="n">الفواتير</th></tr>` +
     (reps.map((r) => `<tr><td>${escapeHtml(r.rep)}</td><td class="n">${money(r.sales)}</td><td class="n">${money(r.paid)}</td><td class="n ${r.paidPct < 50 ? 'low' : ''}">${r.paidPct.toFixed(1)}%</td><td class="n">${money(r.receipts)}</td><td class="n">${money(r.unpaid)}</td><td class="n">${money(r.returns)}</td><td class="n">${r.invoices}</td></tr>`).join('') ||
       '<tr><td colspan="8" class="muted">لا توجد بيانات — استورد ملفات دفترة أولاً</td></tr>');
+  renderCharts(reps, weeklyTrend(s, p));
   $('rangeInfo').textContent = sales.length ? `${s.length.toLocaleString('en-US')} صف مبيعات، ${p.length.toLocaleString('en-US')} سند ضمن الفترة` : '';
+}
+
+function renderCharts(reps, trend) {
+  if (!window.Chart) return;
+  const css = getComputedStyle(document.documentElement);
+  const text = css.getPropertyValue('--text').trim(), grid = css.getPropertyValue('--line').trim(), accent = css.getPropertyValue('--accent').trim(), warn = css.getPropertyValue('--warn').trim();
+  const fmt = (v) => Number(v).toLocaleString('en-US', { maximumFractionDigits: 0 });
+  const common = { responsive: true, maintainAspectRatio: false, plugins: { legend: { labels: { color: text } } } };
+  const axis = (ticks = {}) => ({ ticks: { color: text, ...ticks }, grid: { color: grid } });
+  const top = reps.filter((r) => r.sales > 0);
+  $('repBox').style.height = `${Math.max(260, top.length * 30 + 80)}px`;
+  repChart?.destroy(); trendChart?.destroy();
+  repChart = new window.Chart($('repChart'), {
+    type: 'bar',
+    data: { labels: top.map((r) => r.rep), datasets: [
+      { label: 'المبيعات', data: top.map((r) => r.sales / 100), backgroundColor: accent },
+      { label: 'التحصيل', data: top.map((r) => r.paid / 100), backgroundColor: warn }] },
+    options: { ...common, indexAxis: 'y', scales: { x: axis({ callback: fmt }), y: axis() } },
+  });
+  trendChart = new window.Chart($('trendChart'), {
+    type: 'line',
+    data: { labels: trend.map((w) => w.week), datasets: [
+      { label: 'المبيعات', data: trend.map((w) => w.sales / 100), borderColor: accent, backgroundColor: accent, tension: .25, pointRadius: 0 },
+      { label: 'المقبوضات', data: trend.map((w) => w.receipts / 100), borderColor: warn, backgroundColor: warn, tension: .25, pointRadius: 0 }] },
+    options: { ...common, interaction: { mode: 'index', intersect: false }, scales: { x: axis(), y: axis({ callback: fmt }) } },
+  });
+}
+
+function renderRepList() {
+  const names = [...new Set(sales.map((r) => r.rep))].sort((a, b) => a.localeCompare(b, 'ar'));
+  $('repList').innerHTML = `<label><input type="checkbox" id="repAll"> كل المناديب</label>` +
+    names.map((n) => `<label><input type="checkbox" data-rep="${escapeHtml(n)}" ${selectedReps.has(n) ? 'checked' : ''}> ${escapeHtml(n)}</label>`).join('');
+  $('repAll').checked = selectedReps.size === 0;
+  $('repSelLabel').textContent = selectedReps.size ? `المناديب (${selectedReps.size})` : 'كل المناديب';
 }
 
 async function refresh(resetRange = false) {
@@ -104,6 +142,7 @@ async function refresh(resetRange = false) {
   const logs = await browserStore.lastImports();
   $('log').innerHTML = `<tr><th>الوقت</th><th>المستخدم</th><th>الملف</th><th>النوع</th><th class="n">أُضيف</th><th class="n">حُدّث</th><th class="n">مرفوض</th></tr>` +
     (logs.map((l) => `<tr><td>${escapeHtml(l.at.replace('T', ' ').slice(0, 16))}</td><td>${escapeHtml(l.user)}</td><td>${escapeHtml(l.file)}</td><td>${l.kind === 'invoices' ? 'فواتير' : 'مدفوعات'}</td><td class="n">${l.added}</td><td class="n">${l.updated}</td><td class="n">${l.rejected}</td></tr>`).join('') || '<tr><td colspan="7" class="muted">لا توجد عمليات بعد</td></tr>');
+  renderRepList();
   render();
 }
 
@@ -112,6 +151,12 @@ $('cancelBtn').onclick = () => $('dlg').close();
 $('files').onchange = (e) => previewFiles([...e.target.files]);
 $('saveBtn').onclick = save;
 $('from').onchange = $('to').onchange = render;
+$('repList').onchange = (e) => {
+  const el = e.target;
+  if (el.id === 'repAll') selectedReps.clear();
+  else if (el.dataset.rep !== undefined) { el.checked ? selectedReps.add(el.dataset.rep) : selectedReps.delete(el.dataset.rep); }
+  renderRepList(); render();
+};
 $('allBtn').onclick = () => { const d = [...sales, ...payments].map((r) => r.date).sort(); $('from').value = d[0] ?? ''; $('to').value = d.at(-1) ?? ''; render(); };
 $('clearBtn').onclick = async () => { if (confirm('حذف كل البيانات المحفوظة في هذا المتصفح؟ لا يمكن التراجع.')) { await browserStore.clear(); await refresh(true); } };
 refresh();
