@@ -2,7 +2,7 @@
 // Ledger amounts are unrounded (219.075), so they are kept in micro-riyals (1e-6).
 import { parseDmy } from './shared.js';
 
-const norm = (s) => String(s ?? '').replace(/\s+/g, ' ').trim();
+const tidy = (s) => String(s ?? '').replace(/\s+/g, ' ').trim();
 const toMicro = (raw) => {
   const s = String(raw ?? '').replace(/,/g, '').trim();
   if (s === '') return 0;
@@ -12,7 +12,7 @@ const toMicro = (raw) => {
 };
 
 export function classifyEntry(desc) {
-  const d = norm(desc);
+  const d = tidy(desc);
   let m;
   if (/^(فاتورة مرتجعة|Credit Note)/.test(d)) return { type: 'return_invoice' };
   if ((m = /^(?:فاتورة|Invoice)\s*#(\d+)$/.exec(d))) return { type: 'invoice', ref: m[1] };
@@ -29,12 +29,12 @@ export function parseLedger(rows) {
   let customer = null;
   for (const r of rows) {
     if (!r || r.length < 8) continue;
-    const first = norm(r[0]);
+    const first = tidy(r[0]);
     const date = parseDmy(r[3]);
     if (date) {
       const c = classifyEntry(r[5]);
-      entries.push({ customer, date, desc: norm(r[5]), debit: toMicro(r[6]), credit: toMicro(r[7]), ...c });
-    } else if (first && !norm(r[1]) && !norm(r[3]) && !/^(المجموع|الرصيد|الإجمالي|رقم$)/.test(first)) {
+      entries.push({ customer, date, desc: tidy(r[5]), debit: toMicro(r[6]), credit: toMicro(r[7]), ...c });
+    } else if (first && !tidy(r[1]) && !tidy(r[3]) && !/^(المجموع|الرصيد|الإجمالي|رقم$)/.test(first)) {
       customer = first;
     }
   }

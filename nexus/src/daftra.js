@@ -53,6 +53,7 @@ export function parseInvoices(rows, { today } = {}) {
     returns: findColumnIndex(h, (c) => c.includes('مرتجع')),
     total: findColumnIndex(h, (c) => c.includes('الإجمالي') || c.includes('اجمالي')),
   };
+  const statusCol = findColumnIndex(h, (c) => c.includes('حالة الفاتورة')); // optional: Daftra adds it only sometimes
   for (const [k, v] of Object.entries(col)) if (v < 0) throw new Error(`عمود مفقود: ${k}`);
 
   const sales = [], rejected = [], controlTotals = { groups: [], grand: null };
@@ -65,6 +66,7 @@ export function parseInvoices(rows, { today } = {}) {
         number, date, rep, customer: cleanCustomerName(r[col.customer]),
         total: toCents(r[col.total]), paid: toCents(r[col.paid]),
         unpaid: toCents(r[col.unpaid]), returns: toCents(r[col.returns]),
+        status: statusCol >= 0 ? norm(r[statusCol]) : '',
       };
       // Credit/debit notes reuse numbers (000005 appears twice), so their date joins the key.
       rec.key = /إشعار|اشعار/.test(number) ? `${number}|${date}` : number;
@@ -123,6 +125,7 @@ export function parsePayments(rows, { today } = {}) {
 // Decide which Daftra report a sheet is, so one "import" button can take both files.
 export function detectKind(rows) {
   const has = (...needles) => rows.slice(0, 15).some((r) => needles.every((n) => r.some((c) => norm(c).includes(n))));
+  if (has('رقم القيد')) return 'ledger';
   if (has('المعرف', 'رقم الفاتورة')) return 'payments';
   if (has('التاريخ', 'الإجمالي')) return 'invoices';
   return null;

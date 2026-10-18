@@ -40,7 +40,8 @@ test('column positions are found by name when an extra column shifts them', () =
   const noStatus = csv.split('\n').map((l) => l.replace(/,"لم ترسل"/, '').replace('"حالة الفاتورة الإلكترونية",', '')).join('\n');
   const a = parseInvoices(parseCsv(csv), { today: '2026-10-18' });
   const b = parseInvoices(parseCsv(noStatus), { today: '2026-10-18' });
-  assert.deepEqual(b.sales, a.sales);
+  const dropStatus = (r) => r.sales.map(({ status, ...rest }) => rest); // the shifted file has no status column
+  assert.deepEqual(dropStatus(b), dropStatus(a));
 });
 test('re-parsing the same file gives identical keys (idempotent upsert input)', () => {
   const a = parseInvoices(parseCsv(csv)).sales.map((s) => s.key);

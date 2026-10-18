@@ -50,6 +50,7 @@ create table public.sales (
   unpaid     numeric(14,2) not null,
   returns    numeric(14,2) not null,
   flags      text[] not null default '{}',
+  status     text not null default '',
   updated_at timestamptz not null default now()
 );
 create index sales_date_idx on public.sales (sale_date);
@@ -136,7 +137,7 @@ language sql immutable as $$
 $$;
 
 -- ---------- import: sales ----------
--- p_rows: [{key, number, date:'YYYY-MM-DD', rep, customer, total, paid, unpaid, returns}] (amounts in SAR)
+-- p_rows: [{key, number, date:'YYYY-MM-DD', rep, customer, total, paid, unpaid, returns, status}] (amounts in SAR)
 create function public.import_sales(p_rows jsonb, p_file text default null) returns jsonb
 language plpgsql security definer set search_path = public as $$
 declare
@@ -196,12 +197,12 @@ begin
     if v_total < 0 and v_paid <> 0 then v_flags := array_append(v_flags, 'negative_total_with_payment'); end if;
     if abs(v_total - (v_paid + v_unpaid + v_returns)) > eps then v_flags := array_append(v_flags, 'discrepancy'); end if;
 
-    insert into public.sales as s (key, number, sale_date, rep_name, customer, total, paid, unpaid, returns, flags)
-    values (v_key, v_number, v_date, v_rep, v_customer, v_total, v_paid, v_unpaid, v_returns, v_flags)
+    insert into public.sales as s (key, number, sale_date, rep_name, customer, total, paid, unpaid, returns, flags, status)
+    values (v_key, v_number, v_date, v_rep, v_customer, v_total, v_paid, v_unpaid, v_returns, v_flags, btrim(coalesce(r->>'status', '')))
     on conflict (key) do update set
       number = excluded.number, sale_date = excluded.sale_date, rep_name = excluded.rep_name, customer = excluded.customer,
       total = excluded.total, paid = excluded.paid, unpaid = excluded.unpaid, returns = excluded.returns,
-      flags = excluded.flags, updated_at = now()
+      flags = excluded.flags, status = excluded.status, updated_at = now()
     returning (xmax = 0) into v_inserted;
     if v_inserted then added := added + 1; else updated := updated + 1; end if;
   end loop;

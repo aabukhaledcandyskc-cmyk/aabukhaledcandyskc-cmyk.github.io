@@ -2,7 +2,7 @@
 import { fromCents } from './shared.js';
 
 export const salesToRpc = (sales) => sales.map((s) => ({
-  key: s.key, number: s.number, date: s.date, rep: s.rep, customer: s.customer,
+  key: s.key, number: s.number, date: s.date, rep: s.rep, customer: s.customer, status: s.status ?? '',
   total: fromCents(s.total), paid: fromCents(s.paid), unpaid: fromCents(s.unpaid), returns: fromCents(s.returns),
 }));
 

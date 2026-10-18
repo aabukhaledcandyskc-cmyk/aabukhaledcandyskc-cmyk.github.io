@@ -6,6 +6,9 @@ import {
   monthsInRange, targetsByRep, targetKey, progressPct, agingByCustomer,
 } from './kpi.js';
 import { toCents, fromCents } from './shared.js';
+import { parseLedger } from './ledger.js';
+import { buildChecks, compactLedger, compareWithDaftra } from './verify.js';
+import { rowsFromWorkbook, workbookFromRows } from './excel.js';
 import { NEXUS_VERSION } from './config.js';
 
 const $ = (id) => document.getElementById(id);
@@ -19,7 +22,7 @@ const SYSTEM_KEY = '__system';
 
 const st = {
   sales: [], payments: [], meta: new Map(), targets: [], system: { name: 'NEXUS Dashboard', logo: '' },
-  sel: { reps: new Set(), regions: new Set(), positions: new Set() },
+  sel: { reps: new Set(), regions: new Set(), positions: new Set(), statuses: new Set() }, ledger: null, theme: null,
   tab: 'summary', invLimit: 300, payLimit: 300, pending: [], charts: {},
 };
 
@@ -28,16 +31,8 @@ $('version').textContent = `الإصدار ${NEXUS_VERSION}`;
 // ---------------------------------------------------------------- file import
 async function readRows(file) {
   if (/\.csv$/i.test(file.name)) return parseCsv(await file.text());
-  if (!window.XLSX) {
-    await new Promise((res, rej) => {
-      const s = document.createElement('script');
-      s.src = 'https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js';
-      s.onload = res; s.onerror = () => rej(new Error('تعذر تحميل مكتبة Excel (تحتاج اتصالاً بالإنترنت). احفظ الملف بصيغة CSV وأعد المحاولة'));
-      document.head.append(s);
-    });
-  }
-  const wb = window.XLSX.read(await file.arrayBuffer(), { type: 'array' });
-  return window.XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]], { header: 1, raw: false, defval: '' });
+  if (!window.XLSX) throw new Error('مكتبة Excel غير محمّلة؛ احفظ الملف بصيغة CSV وأعد المحاولة');
+  return rowsFromWorkbook(window.XLSX, await file.arrayBuffer());
 }
 
 async function previewFiles(files) {
@@ -47,11 +42,21 @@ async function previewFiles(files) {
     try {
       const rows = await readRows(file);
       const kind = detectKind(rows);
-      if (!kind && /الرصيد/.test(rows.slice(0, 3).flat().join(' '))) { out.push(`<div class="file"><b>${escapeHtml(file.name)}</b><div class="warn">الأستاذ العام للعملاء: غير مستورد في هذه المرحلة، وسيُستخدم لمطابقة الأرصدة لاحقاً</div></div>`); continue; }
-      if (!kind) { out.push(`<div class="file"><b>${escapeHtml(file.name)}</b><div class="bad">لم يُعرف نوع الملف (ليس تقرير فواتير ولا مدفوعات من دفترة)</div></div>`); continue; }
+      if (kind === 'ledger') {
+        const led = parseLedger(rows);
+        st.pending.push({ kind, file: file.name, ledger: led, recs: led.entries, rejected: [] });
+        out.push(`<div class="file"><b>${escapeHtml(file.name)}</b> — الأستاذ العام للعملاء<div class="ok">${int(led.entries.length)} قيداً، ${int(led.customers)} حساب عميل</div><div class="muted">لا يُضاف إلى المبيعات؛ يُستخدم للمطابقة في تبويب «التحقق»</div></div>`);
+        continue;
+      }
+      if (!kind) { out.push(`<div class="file"><b>${escapeHtml(file.name)}</b><div class="bad">لم يُعرف نوع الملف (ليس تقرير فواتير ولا مدفوعات ولا أستاذ من دفترة)</div></div>`); continue; }
       const res = kind === 'invoices' ? parseInvoices(rows, { today: today() }) : parsePayments(rows, { today: today() });
       const recs = kind === 'invoices' ? res.sales : res.payments;
       st.pending.push({ kind, file: file.name, recs, rejected: res.rejected });
+      const fileChecks = buildChecks(kind === 'invoices'
+        ? { sales: recs, payments: [], controls: { invoices: res.controlTotals } }
+        : { sales: [], payments: recs, controls: { payments: res.controlTotals } });
+      const failed = fileChecks.checks.filter((c) => c.ok === false).length + fileChecks.repRows.filter((r) => !r.ok).length;
+      const verdict = fileChecks.checks.length ? (failed ? `<div class="bad">✗ ${failed} فحص لا يطابق صفوف المجاميع داخل الملف نفسه</div>` : `<div class="ok">✓ يطابق صف «الإجمالي الكلي» ومجاميع المناديب داخل الملف</div>`) : '';
       const dates = recs.map((r) => r.date).sort();
       const count = (f) => recs.filter((r) => r.flags?.includes(f)).length;
       const extra = kind === 'invoices'
@@ -62,7 +67,7 @@ async function previewFiles(files) {
         : `<div>إجمالي المقبوضات: <b>${money(recs.reduce((a, r) => a + r.amount, 0))}</b></div>
            ${res.duplicateKeys.length ? `<div class="bad">مفاتيح مكررة: ${res.duplicateKeys.length}</div>` : ''}`;
       out.push(`<div class="file"><b>${escapeHtml(file.name)}</b> — ${kind === 'invoices' ? 'فواتير' : 'مدفوعات'}
-        <div class="ok">${int(recs.length)} صف صالح</div><div class="muted">من ${dates[0] ?? '—'} إلى ${dates.at(-1) ?? '—'}</div>${extra}
+        <div class="ok">${int(recs.length)} صف صالح</div>${verdict}<div class="muted">من ${dates[0] ?? '—'} إلى ${dates.at(-1) ?? '—'}</div>${extra}
         ${res.rejected.length ? `<div class="bad">مرفوض: ${res.rejected.length} — ${escapeHtml(res.rejected.slice(0, 3).map((r) => `سطر ${r.line}: ${r.reason}`).join('، '))}</div>` : ''}</div>`);
     } catch (e) {
       out.push(`<div class="file"><b>${escapeHtml(file.name)}</b><div class="bad">${escapeHtml(e.message)}</div></div>`);
@@ -76,6 +81,12 @@ async function saveImport() {
   $('saveBtn').disabled = true;
   const results = [];
   for (const p of st.pending) {
+    if (p.kind === 'ledger') {
+      await browserStore.put('meta', { key: 'ledger', at: new Date().toISOString(), file: p.file, data: compactLedger(p.ledger) });
+      await browserStore.log({ at: new Date().toISOString(), user: 'guest', kind: 'ledger', file: p.file, added: p.recs.length, updated: 0, rejected: 0 });
+      results.push(`<div class="file"><b>${escapeHtml(p.file)}</b><div class="ok">حُفظ الأستاذ العام (${int(p.recs.length)} قيداً)</div></div>`);
+      continue;
+    }
     const r = await browserStore.upsert(p.kind === 'invoices' ? 'sales' : 'payments', p.recs);
     await browserStore.log({ at: new Date().toISOString(), user: 'guest', kind: p.kind, file: p.file, ...r, rejected: p.rejected.length });
     results.push(`<div class="file"><b>${escapeHtml(p.file)}</b><div class="ok">أُضيف ${int(r.added)} — حُدّث ${int(r.updated)} — مرفوض ${p.rejected.length}</div></div>`);
@@ -97,10 +108,14 @@ const MSELS = [
   { id: 'rep', key: 'reps', label: { all: 'كل المناديب', sel: 'المناديب' }, opts: () => allRepNames() },
   { id: 'region', key: 'regions', label: { all: 'كل المناطق', sel: 'المناطق' }, opts: () => unique([...st.meta.values()].map((m) => m.region)) },
   { id: 'pos', key: 'positions', label: { all: 'كل المناصب', sel: 'المناصب' }, opts: () => unique([...st.meta.values()].map((m) => m.position)) },
+  { id: 'status', key: 'statuses', label: { all: 'كل الحالات', sel: 'الحالات' }, opts: () => unique(st.sales.map((r) => r.status ?? '')) },
 ];
 const unique = (xs) => [...new Set(xs)].sort((a, b) => a.localeCompare(b, 'ar'));
 const allRepNames = () => unique([...st.sales, ...st.payments].map((r) => r.rep));
-function renderMsels() { for (const m of MSELS) msel(m.id, m.label, st.sel[m.key], m.opts()); }
+function renderMsels() {
+  for (const m of MSELS) msel(m.id, m.label, st.sel[m.key], m.opts());
+  $('statusSel').style.display = unique(st.sales.map((r) => r.status ?? '')).length > 1 ? '' : 'none'; // only useful with 2+ statuses
+}
 for (const m of MSELS) {
   $(`${m.id}List`).onchange = (e) => {
     const el = e.target, set = st.sel[m.key];
@@ -112,7 +127,8 @@ for (const m of MSELS) {
 function current() {
   const from = $('from').value, to = $('to').value;
   const allowed = allowedReps(allRepNames(), st.meta, st.sel);
-  const s = restrictToReps(filterByPeriod(st.sales, { from, to }), allowed);
+  const stSel = st.sel.statuses;
+  const s = restrictToReps(filterByPeriod(st.sales, { from, to }), allowed).filter((r) => !stSel.size || stSel.has(r.status ?? ''));
   const p = restrictToReps(filterByPeriod(st.payments, { from, to }), allowed);
   return { from, to, allowed, s, p };
 }
@@ -180,7 +196,8 @@ const like = (q, ...fields) => { const n = q.trim().toLowerCase(); return !n || 
 const view = {}; // current filtered lists, used by CSV export
 
 function renderPane(c) {
-  if (st.tab === 'aging') {
+  if (st.tab === 'verify') renderVerify(c);
+  else if (st.tab === 'aging') {
     const asOf = c.to || today();
     const q = $('agingQ').value;
     view.aging = agingByCustomer(c.s, asOf).filter((x) => like(q, x.customer));
@@ -204,18 +221,50 @@ function renderPane(c) {
   }
 }
 
-function downloadCsv(name, header, rows) {
-  const cell = (v) => `"${String(v ?? '').replace(/"/g, '""')}"`;
-  const blob = new Blob(['﻿' + [header, ...rows].map((r) => r.map(cell).join(',')).join('\r\n')], { type: 'text/csv;charset=utf-8' });
+function save(blob, name) {
   const a = Object.assign(document.createElement('a'), { href: URL.createObjectURL(blob), download: name });
   document.body.append(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(a.href), 1000);
 }
+function download(name, fmt, header, rows) {
+  if (fmt === 'xlsx') {
+    if (!window.XLSX) return alert('مكتبة Excel غير محمّلة');
+    const wb = workbookFromRows(window.XLSX, header, rows, name);
+    return save(new Blob([window.XLSX.write(wb, { type: 'array', bookType: 'xlsx' })], { type: 'application/octet-stream' }), `${name}.xlsx`);
+  }
+  const cell = (v) => `"${String(v ?? '').replace(/"/g, '""')}"`;
+  save(new Blob(['\ufeff' + [header, ...rows].map((r) => r.map(cell).join(',')).join('\r\n')], { type: 'text/csv;charset=utf-8' }), `${name}.csv`);
+}
 const sar = (c) => fromCents(c);
 const EXPORTS = {
-  aging: () => downloadCsv('aging.csv', ['العميل', 'الرصيد الصافي', '0-30', '31-60', '61-90', '+90', 'فواتير مفتوحة', 'آخر فاتورة'], view.aging.map((x) => [x.customer, sar(x.net), sar(x.b0), sar(x.b30), sar(x.b60), sar(x.b90), x.open, x.last])),
-  invoices: () => downloadCsv('invoices.csv', ['التاريخ', 'الرقم', 'المندوب', 'العميل', 'الإجمالي', 'المدفوع', 'غير المدفوع', 'المرتجع', 'ملاحظات'], view.invoices.map((r) => [r.date, r.number, r.rep, r.customer, sar(r.total), sar(r.paid), sar(r.unpaid), sar(r.returns), r.flags.map((f) => FLAG_LABEL[f] ?? f).join(' | ')])),
-  payments: () => downloadCsv('payments.csv', ['التاريخ', 'رقم السند', 'الفاتورة', 'المندوب', 'العميل', 'الطريقة', 'المبلغ'], view.payments.map((r) => [r.date, r.number, r.invoice, r.rep, r.customer, r.method, sar(r.amount)])),
+  aging: (f) => download('aging', f, ['العميل', 'الرصيد الصافي', '0-30', '31-60', '61-90', '+90', 'فواتير مفتوحة', 'آخر فاتورة'], view.aging.map((x) => [x.customer, sar(x.net), sar(x.b0), sar(x.b30), sar(x.b60), sar(x.b90), x.open, x.last])),
+  invoices: (f) => download('invoices', f, ['التاريخ', 'الرقم', 'المندوب', 'العميل', 'الإجمالي', 'المدفوع', 'غير المدفوع', 'المرتجع', 'ملاحظات'], view.invoices.map((r) => [r.date, r.number, r.rep, r.customer, sar(r.total), sar(r.paid), sar(r.unpaid), sar(r.returns), r.flags.map((x) => FLAG_LABEL[x] ?? x).join(' | ')])),
+  payments: (f) => download('payments', f, ['التاريخ', 'رقم السند', 'الفاتورة', 'المندوب', 'العميل', 'الطريقة', 'المبلغ'], view.payments.map((r) => [r.date, r.number, r.invoice, r.rep, r.customer, r.method, sar(r.amount)])),
 };
+
+// ---------------------------------------------------------------- verification tab
+function renderVerify(c) {
+  const controls = st.controls && st.controls.nSales === st.sales.length && st.controls.nPayments === st.payments.length ? st.controls : null;
+  const v = buildChecks({ sales: st.sales, payments: st.payments, controls: controls ?? {}, ledger: st.ledger });
+  const fmtv = (ch, x) => (ch.count ? int(x) : money(x));
+  const groups = [...new Set(v.checks.map((x) => x.group))];
+  const mark = (ok) => (ok === true ? '<span class="ok">✓ مطابق</span>' : ok === false ? '<span class="bad">✗ فرق</span>' : '<span class="warn">⚠ مفسَّر</span>');
+  let html = '';
+  if (!st.sales.length) html = '<p class="muted">لا توجد بيانات بعد.</p>';
+  else {
+    html += `<p class="muted">تُقارن هذه الفحوص كل البيانات المحفوظة (دون فلاتر) بمصادر مستقلة: ${controls ? 'صفوف المجاميع داخل ملفات دفترة، و' : ''}الأستاذ العام للعملاء.${controls ? '' : ' مجاميع الملفات تُفحص لحظة الاستيراد في نافذة المعاينة.'}</p>`;
+    if (!st.ledger) html += '<div class="notice">لم يُستورد الأستاذ العام بعد. اضغط «استيراد ملفات دفترة» واختر ملف «حساب الأستاذ العام للعملاء» لتفعيل المطابقة.</div>';
+    html += groups.map((g) => `<h3>${escapeHtml(g)}</h3><div class="tablewrap"><table><tr><th>الفحص</th><th class="n">المرجع</th><th class="n">النظام</th><th class="n">الفرق</th><th>النتيجة</th></tr>${v.checks.filter((x) => x.group === g).map((x) => `<tr><td style="white-space:normal">${escapeHtml(x.label)}${x.note ? `<div class="muted">${escapeHtml(x.note)}</div>` : ''}</td><td class="n">${fmtv(x, x.file)}</td><td class="n">${fmtv(x, x.system)}</td><td class="n">${fmtv(x, x.diff)}</td><td>${mark(x.ok)}</td></tr>`).join('')}</table></div>`).join('');
+    if (v.repRows.length) html += `<h3>مجاميع المناديب (${v.repRows.filter((r) => r.ok).length} من ${v.repRows.length} متطابقة مع ملف دفترة)</h3><div class="tablewrap" style="max-height:360px;overflow:auto"><table><tr><th>المندوب</th><th class="n">الإجمالي (ملف)</th><th class="n">(نظام)</th><th class="n">المدفوع (ملف)</th><th class="n">(نظام)</th><th class="n">غير المدفوع (ملف)</th><th class="n">(نظام)</th><th>النتيجة</th></tr>${v.repRows.map((r) => `<tr><td>${escapeHtml(r.rep)}</td>${[0, 1, 2].map((i) => `<td class="n">${money(r.file[i])}</td><td class="n">${money(r.system[i])}</td>`).join('')}<td>${r.ok ? '<span class="ok">✓</span>' : '<span class="bad">✗</span>'}</td></tr>`).join('')}</table></div>`;
+  }
+  $('verifyBody').innerHTML = html;
+  const k = computeKpis(c.s, c.p);
+  $('cmpNote').textContent = `تُقارَن الأرقام المدخلة بأرقام النظام للفلاتر الحالية: ${c.from || '—'} إلى ${c.to || '—'}.`;
+  $('cmpBtn').onclick = () => {
+    const val = (id) => (document.getElementById(id).value.trim() === '' ? null : toCents(document.getElementById(id).value));
+    const res = compareWithDaftra(k, { sales: val('cmpSales'), paid: val('cmpPaid'), unpaid: val('cmpUnpaid'), returns: val('cmpReturns'), receipts: val('cmpReceipts') });
+    $('cmpOut').innerHTML = res.length ? `<div class="tablewrap"><table><tr><th>البند</th><th class="n">دفترة</th><th class="n">النظام</th><th class="n">الفرق</th><th>النتيجة</th></tr>${res.map((x) => `<tr><td>${x.label}</td><td class="n">${money(x.official)}</td><td class="n">${money(x.system)}</td><td class="n">${money(x.diff)}</td><td>${x.ok ? '<span class="ok">✓ مطابق</span>' : '<span class="bad">✗ فرق</span>'}</td></tr>`).join('')}</table></div>` : '<span class="muted">أدخل رقماً واحداً على الأقل.</span>';
+  };
+}
 
 // ---------------------------------------------------------------- targets dialog
 function targetRows() {
@@ -298,7 +347,7 @@ async function restore(file) {
 function decodeSeed(d) {
   const FLAGS = [[1, 'overpaid'], [2, 'discrepancy'], [4, 'negative_total_with_payment']];
   return {
-    sales: d.sales.map((r) => ({ key: r[0], number: r[1], date: r[2], rep: d.reps[r[3]], customer: d.customers[r[4]], total: r[5], paid: r[6], unpaid: r[7], returns: r[8], flags: FLAGS.filter(([b]) => r[9] & b).map(([, n]) => n) })),
+    sales: d.sales.map((r) => ({ key: r[0], number: r[1], date: r[2], rep: d.reps[r[3]], customer: d.customers[r[4]], total: r[5], paid: r[6], unpaid: r[7], returns: r[8], flags: FLAGS.filter(([b]) => r[9] & b).map(([, n]) => n), status: d.statuses?.[r[10]] ?? '' })),
     payments: d.payments.map((r) => ({ key: r[0], number: r[1], invoice: r[2], date: r[3], rep: d.reps[r[4]], customer: d.customers[r[5]], method: r[6], amount: r[7] })),
   };
 }
@@ -306,11 +355,14 @@ function decodeSeed(d) {
 async function refresh(resetRange = false) {
   [st.sales, st.payments, st.targets] = await Promise.all([browserStore.loadAll('sales'), browserStore.loadAll('payments'), browserStore.loadAll('targets')]);
   await loadMeta(); applySystem();
+  const metaRows = await browserStore.loadAll('meta');
+  st.ledger = metaRows.find((m) => m.key === 'ledger')?.data ?? null;
+  st.controls = metaRows.find((m) => m.key === 'controls')?.data ?? null;
   const dates = [...st.sales, ...st.payments].map((r) => r.date).sort();
   if (resetRange || (!$('from').value && dates.length)) { $('from').value = dates[0] ?? ''; $('to').value = dates.at(-1) ?? ''; }
   const logs = await browserStore.lastImports();
   $('log').innerHTML = `<tr><th>الوقت</th><th>المستخدم</th><th>الملف</th><th>النوع</th><th class="n">أُضيف</th><th class="n">حُدّث</th><th class="n">مرفوض</th></tr>` +
-    (logs.map((l) => `<tr><td>${escapeHtml(l.at.replace('T', ' ').slice(0, 16))}</td><td>${escapeHtml(l.user)}</td><td>${escapeHtml(l.file)}</td><td>${l.kind === 'invoices' ? 'فواتير' : 'مدفوعات'}</td><td class="n">${int(l.added)}</td><td class="n">${int(l.updated)}</td><td class="n">${l.rejected}</td></tr>`).join('') || '<tr><td colspan="7" class="muted">لا توجد عمليات بعد</td></tr>');
+    (logs.map((l) => `<tr><td>${escapeHtml(l.at.replace('T', ' ').slice(0, 16))}</td><td>${escapeHtml(l.user)}</td><td>${escapeHtml(l.file)}</td><td>${l.kind === 'invoices' ? 'فواتير' : l.kind === 'ledger' ? 'الأستاذ' : 'مدفوعات'}</td><td class="n">${int(l.added)}</td><td class="n">${int(l.updated)}</td><td class="n">${l.rejected}</td></tr>`).join('') || '<tr><td colspan="7" class="muted">لا توجد عمليات بعد</td></tr>');
   renderMsels(); render();
 }
 
@@ -322,6 +374,13 @@ $('from').onchange = $('to').onchange = render;
 $('allBtn').onclick = () => { const d = [...st.sales, ...st.payments].map((r) => r.date).sort(); $('from').value = d[0] ?? ''; $('to').value = d.at(-1) ?? ''; render(); };
 $('clearBtn').onclick = async () => { if (confirm('حذف الفواتير والسندات المحفوظة في هذا المتصفح؟ (الأهداف والإعدادات تبقى). تأكد من أخذ نسخة احتياطية أولاً.')) { await browserStore.clear(); await refresh(true); } };
 $('printBtn').onclick = () => window.print();
+const THEME_KEY = 'nexus-theme';
+const setTheme = (t) => { document.documentElement.dataset.theme = t; try { localStorage.setItem(THEME_KEY, t); } catch { /* private mode */ } };
+try { const t = localStorage.getItem(THEME_KEY); if (t) document.documentElement.dataset.theme = t; } catch { /* ignore */ }
+$('themeBtn').onclick = () => {
+  const dark = document.documentElement.dataset.theme ? document.documentElement.dataset.theme === 'dark' : matchMedia('(prefers-color-scheme: dark)').matches;
+  setTheme(dark ? 'light' : 'dark'); render();
+};
 $('tabs').onclick = (e) => {
   const b = e.target.closest('[data-tab]'); if (!b) return;
   st.tab = b.dataset.tab;
@@ -333,7 +392,7 @@ $('agingQ').oninput = $('invQ').oninput = $('payQ').oninput = () => { st.invLimi
 $('invMore').onclick = () => { st.invLimit += 500; render(); };
 $('payMore').onclick = () => { st.payLimit += 500; render(); };
 document.addEventListener('click', (e) => {
-  const b = e.target.closest('[data-export]'); if (b) EXPORTS[b.dataset.export]?.();
+  const b = e.target.closest('[data-export]'); if (b) EXPORTS[b.dataset.export]?.(b.dataset.fmt || 'csv');
   document.querySelectorAll('details.msel[open]').forEach((d) => { if (!d.contains(e.target)) d.removeAttribute('open'); });
 });
 
@@ -355,6 +414,9 @@ $('restoreFile').onchange = async (e) => { try { await restore(e.target.files[0]
   if (seedEl && (await browserStore.loadAll('sales')).length === 0) {
     const seed = decodeSeed(JSON.parse(seedEl.textContent));
     await browserStore.upsert('sales', seed.sales); await browserStore.upsert('payments', seed.payments);
+    const m = JSON.parse(seedEl.textContent).meta;
+    if (m?.ledger) await browserStore.put('meta', { key: 'ledger', at: new Date().toISOString(), file: '(مضمَّن في الملف)', data: m.ledger });
+    if (m?.controls) await browserStore.put('meta', { key: 'controls', data: { ...m.controls, nSales: seed.sales.length, nPayments: seed.payments.length } });
     $('notice').textContent = 'تم تحميل بياناتك الحقيقية مرة واحدة من الملف إلى هذا المتصفح. التعديلات (الأهداف والإعدادات) تُحفظ هنا.';
   }
   await refresh(true);

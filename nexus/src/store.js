@@ -11,12 +11,12 @@ export function mergeRecords(existing, incoming) {
 
 // Browser storage (IndexedDB). Same interface a Supabase backend will implement later.
 const DB = 'nexus';
-const STORES = ['sales', 'payments', 'imports', 'repSettings', 'targets'];
+const STORES = ['sales', 'payments', 'imports', 'repSettings', 'targets', 'meta'];
 const KEYLESS = new Set(['imports']);
 
 function open() {
   return new Promise((resolve, reject) => {
-    const req = indexedDB.open(DB, 2);
+    const req = indexedDB.open(DB, 3);
     req.onupgradeneeded = () => {
       for (const s of STORES) {
         if (!req.result.objectStoreNames.contains(s)) req.result.createObjectStore(s, KEYLESS.has(s) ? { autoIncrement: true } : { keyPath: 'key' });
