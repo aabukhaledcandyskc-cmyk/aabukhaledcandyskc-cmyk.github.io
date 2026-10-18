@@ -11,13 +11,16 @@ export function mergeRecords(existing, incoming) {
 
 // Browser storage (IndexedDB). Same interface a Supabase backend will implement later.
 const DB = 'nexus';
-const STORES = ['sales', 'payments', 'imports'];
+const STORES = ['sales', 'payments', 'imports', 'repSettings', 'targets'];
+const KEYLESS = new Set(['imports']);
 
 function open() {
   return new Promise((resolve, reject) => {
-    const req = indexedDB.open(DB, 1);
+    const req = indexedDB.open(DB, 2);
     req.onupgradeneeded = () => {
-      for (const s of STORES) req.result.createObjectStore(s, s === 'imports' ? { autoIncrement: true } : { keyPath: 'key' });
+      for (const s of STORES) {
+        if (!req.result.objectStoreNames.contains(s)) req.result.createObjectStore(s, KEYLESS.has(s) ? { autoIncrement: true } : { keyPath: 'key' });
+      }
     };
     req.onsuccess = () => resolve(req.result);
     req.onerror = () => reject(req.error);
@@ -38,7 +41,9 @@ export const browserStore = {
     await done(tx);
     return { added: merged.added, updated: merged.updated };
   },
+  async put(name, rec) { const db = await open(); const tx = db.transaction(name, 'readwrite'); tx.objectStore(name).put(rec); await done(tx); },
+  async remove(name, key) { const db = await open(); const tx = db.transaction(name, 'readwrite'); tx.objectStore(name).delete(key); await done(tx); },
   async log(entry) { const db = await open(); const tx = db.transaction('imports', 'readwrite'); tx.objectStore('imports').add(entry); await done(tx); },
   async lastImports() { const db = await open(); return (await get(db.transaction('imports').objectStore('imports'))).slice(-5).reverse(); },
-  async clear() { const db = await open(); const tx = db.transaction(STORES, 'readwrite'); STORES.forEach((s) => tx.objectStore(s).clear()); await done(tx); },
+  async clear() { const db = await open(); const names = ['sales', 'payments', 'imports']; const tx = db.transaction(names, 'readwrite'); names.forEach((s) => tx.objectStore(s).clear()); await done(tx); },
 };

@@ -1,5 +1,5 @@
-// Parses real Daftra exports and writes a compact JSON for the standalone demo:
-// anonymised customers + a verification report. Usage:
+// Parses real Daftra exports and writes a compact JSON seed for the single-file build:
+// real customer names (use --anon to replace them) + a verification report. Usage:
 //   node scripts/make-demo-data.mjs <samples-dir> <out.json>
 import fs from 'node:fs';
 import path from 'node:path';
@@ -8,7 +8,9 @@ import { parseInvoices, parsePayments } from '../src/daftra.js';
 import { parseLedger, reconcile } from '../src/ledger.js';
 import { fromCents } from '../src/shared.js';
 
-const [dir, out] = process.argv.slice(2);
+const args = process.argv.slice(2);
+const anon = args.includes('--anon');
+const [dir, out] = args.filter((a) => !a.startsWith('--'));
 const pick = (re) => path.join(dir, fs.readdirSync(dir).find((f) => re.test(f)));
 const read = (re) => parseCsv(fs.readFileSync(pick(re), 'utf8'));
 const today = new Date().toISOString().slice(0, 10);
@@ -21,7 +23,7 @@ const sum = (xs, k) => xs.reduce((a, x) => a + x[k], 0);
 
 const reps = [...new Set([...inv.sales, ...pay.payments].map((r) => r.rep))];
 const custIds = new Map();
-const cid = (name) => { if (!custIds.has(name)) custIds.set(name, custIds.size + 1); return custIds.get(name); };
+const cid = (name) => { if (!custIds.has(name)) custIds.set(name, custIds.size); return custIds.get(name); };
 const FLAG = { overpaid: 1, discrepancy: 2, negative_total_with_payment: 4 };
 
 const checks = [];
@@ -52,11 +54,15 @@ add('الاستيراد', 'صفوف الفواتير المرفوضة', 0, inv.r
 add('الاستيراد', 'مفاتيح فواتير مكررة', 0, inv.duplicateKeys.length);
 add('الاستيراد', 'مفاتيح سندات مكررة', 0, pay.duplicateKeys.length);
 
+const salesRows = inv.sales.map((s) => [s.key, s.number, s.date, reps.indexOf(s.rep), cid(s.customer), s.total, s.paid, s.unpaid, s.returns, s.flags.reduce((a, f) => a + (FLAG[f] ?? 0), 0)]);
+const payRows = pay.payments.map((p) => [p.key, p.number, p.invoice, p.date, reps.indexOf(p.rep), cid(p.customer), p.method, p.amount]);
+const customers = [...custIds.keys()].map((n, i) => (anon ? `عميل ${i + 1}` : n));
 fs.writeFileSync(out, JSON.stringify({
   generatedAt: new Date().toISOString(),
   reps,
-  sales: inv.sales.map((s) => [s.key, s.number, s.date, reps.indexOf(s.rep), cid(s.customer), s.total, s.paid, s.unpaid, s.returns, s.flags.reduce((a, f) => a + (FLAG[f] ?? 0), 0)]),
-  payments: pay.payments.map((p) => [p.key, p.number, p.invoice, p.date, reps.indexOf(p.rep), cid(p.customer), p.method, p.amount]),
+  customers,
+  sales: salesRows,
+  payments: payRows,
   verification: { checks, repRows, stats: {
     invoiceRows: inv.sales.length, payments: pay.payments.length, zeroPayments: pay.zeroAmount,
     ledgerCustomers: led.customers, ledgerEntries: led.entries.length, manualEntries: led.entries.filter((e) => e.type === 'manual').length,

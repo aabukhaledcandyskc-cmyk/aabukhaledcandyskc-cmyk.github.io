@@ -1,4 +1,4 @@
-import { UNKNOWN_REP } from './shared.js';
+import { UNKNOWN_REP, daysBetween } from './shared.js';
 
 const inRange = (d, from, to) => (!from || d >= from) && (!to || d <= to);
 const sum = (xs, f) => xs.reduce((a, x) => a + f(x), 0);
@@ -58,4 +58,54 @@ export function weeklyTrend(sales, payments, start = WEEK_START) {
 // Empty set = no restriction (all reps).
 export function filterByReps(rows, reps) {
   return reps && reps.size ? rows.filter((r) => reps.has(r.rep)) : rows;
+}
+
+// ---- region / position filters (rep -> meta lookup) ----
+export function allowedReps(allReps, meta, { reps, regions, positions }) {
+  return new Set(allReps.filter((r) =>
+    (!reps?.size || reps.has(r)) &&
+    (!regions?.size || regions.has(meta.get(r)?.region || '')) &&
+    (!positions?.size || positions.has(meta.get(r)?.position || ''))));
+}
+export const restrictToReps = (rows, allowed) => (allowed ? rows.filter((r) => allowed.has(r.rep)) : rows);
+
+// ---- monthly targets ----
+export function monthsInRange(from, to) {
+  if (!from || !to || from > to) return [];
+  let [y, m] = from.slice(0, 7).split('-').map(Number);
+  const [ye, me] = to.slice(0, 7).split('-').map(Number);
+  const out = [];
+  while (y < ye || (y === ye && m <= me)) { out.push({ month: m, year: y }); if (++m > 12) { m = 1; y++; } }
+  return out;
+}
+export const targetKey = (rep, month, year) => `${rep}|${month}|${year}`;
+
+// targets: [{rep, month, year, salesTarget, collectionTarget}] (halalas). Returns Map rep -> sums over the months.
+export function targetsByRep(targets, allowed, months) {
+  const inMonths = new Set(months.map((x) => `${x.year}-${x.month}`));
+  const out = new Map();
+  for (const t of targets) {
+    if (!inMonths.has(`${t.year}-${t.month}`) || (allowed && !allowed.has(t.rep))) continue;
+    const a = out.get(t.rep) ?? { sales: 0, collection: 0 };
+    a.sales += t.salesTarget; a.collection += t.collectionTarget; out.set(t.rep, a);
+  }
+  return out;
+}
+export const progressPct = (actual, target) => (target > 0 ? (actual / target) * 100 : null);
+
+// ---- customer aging: net unpaid + open balances bucketed by invoice age at asOf ----
+export function agingByCustomer(sales, asOf) {
+  const by = new Map();
+  for (const s of sales) {
+    const c = by.get(s.customer) ?? { customer: s.customer, net: 0, b0: 0, b30: 0, b60: 0, b90: 0, open: 0, last: '' };
+    c.net += s.unpaid;
+    if (s.unpaid > 0) {
+      const age = daysBetween(asOf, s.date);
+      if (age <= 30) c.b0 += s.unpaid; else if (age <= 60) c.b30 += s.unpaid; else if (age <= 90) c.b60 += s.unpaid; else c.b90 += s.unpaid;
+      c.open++;
+    }
+    if (s.date > c.last) c.last = s.date;
+    by.set(s.customer, c);
+  }
+  return [...by.values()].filter((c) => c.net > 0).sort((a, b) => b.net - a.net);
 }

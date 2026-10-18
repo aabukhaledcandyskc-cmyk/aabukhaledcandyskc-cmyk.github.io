@@ -6,18 +6,18 @@
 <title>NEXUS Dashboard</title>
 <link rel="icon" href="data:,">
 <style>
-:root{--bg:#f5f6f8;--card:#fff;--text:#1b2430;--muted:#667085;--line:#e4e7ec;--accent:#0f766e;--warn:#b45309;--bad:#b42318;--ok:#067647}
+:root{--bg:#f5f6f8;--card:#fff;--text:#1b2430;--muted:#667085;--line:#e4e7ec;--accent:#0f766e;--warn:#b45309;--bad:#b42318;--ok:#067647;--gold:#d4a017}
 @media (prefers-color-scheme:dark){:root:not([data-theme=light]){--bg:#10151c;--card:#18202a;--text:#e8edf3;--muted:#9aa7b6;--line:#2a3544;--accent:#2dd4bf;--warn:#fbbf24;--bad:#f87171;--ok:#4ade80}}
 :root[data-theme=dark]{--bg:#10151c;--card:#18202a;--text:#e8edf3;--muted:#9aa7b6;--line:#2a3544;--accent:#2dd4bf;--warn:#fbbf24;--bad:#f87171;--ok:#4ade80}
 *{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--text);font:15px/1.5 system-ui,"Segoe UI",Tahoma,sans-serif}
 header{display:flex;flex-wrap:wrap;gap:12px;align-items:center;justify-content:space-between;padding:14px 16px;background:var(--card);border-bottom:1px solid var(--line)}
 h1{margin:0;font-size:18px}.badge{font-size:12px;color:var(--muted);border:1px solid var(--line);border-radius:99px;padding:2px 8px;margin-inline-start:8px}
-main{max-width:1200px;margin:0 auto;padding:16px}
-button,input{font:inherit;color:inherit}
+main{max-width:1240px;margin:0 auto;padding:16px}
+button,input,select{font:inherit;color:inherit}
 button{background:var(--accent);color:#fff;border:0;border-radius:8px;padding:8px 14px;cursor:pointer}
 button.ghost{background:transparent;color:var(--text);border:1px solid var(--line)}
 button:disabled{opacity:.5;cursor:not-allowed}
-input[type=date]{background:var(--card);border:1px solid var(--line);border-radius:8px;padding:6px 8px}
+input[type=date],input[type=text],input[type=number],input[type=search],select{background:var(--card);border:1px solid var(--line);border-radius:8px;padding:6px 8px}
 .notice{background:color-mix(in srgb,var(--warn) 12%,var(--card));border:1px solid var(--warn);border-radius:8px;padding:8px 12px;margin-bottom:12px;font-size:13px}
 .bar{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-bottom:12px}
 .grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:12px;margin-bottom:16px}
@@ -25,47 +25,92 @@ input[type=date]{background:var(--card);border:1px solid var(--line);border-radi
 .card .l{color:var(--muted);font-size:13px}.card .v{font-size:22px;font-weight:700;margin-top:2px;font-variant-numeric:tabular-nums}.card .s{color:var(--muted);font-size:12px}
 .tablewrap{overflow-x:auto;background:var(--card);border:1px solid var(--line);border-radius:12px}
 table{border-collapse:collapse;width:100%;font-variant-numeric:tabular-nums}th,td{padding:8px 10px;text-align:start;border-bottom:1px solid var(--line);white-space:nowrap}
-th{color:var(--muted);font-weight:600;font-size:13px}td.n,th.n{text-align:left}td.n,.card .v{direction:ltr;unicode-bidi:isolate}.card .v{text-align:right}tr:last-child td{border-bottom:0}
-.low{color:var(--bad);font-weight:600}
-dialog{border:1px solid var(--line);border-radius:14px;background:var(--card);color:var(--text);width:min(640px,94vw);padding:18px}
+th{color:var(--muted);font-weight:600;font-size:13px;position:sticky;top:0;background:var(--card)}td.n,th.n{text-align:left}td.n,.card .v{direction:ltr;unicode-bidi:isolate}.card .v{text-align:right}tr:last-child td{border-bottom:0}
+.low{color:var(--bad);font-weight:600}.ok{color:var(--ok)}.bad{color:var(--bad)}.warn{color:var(--warn)}.muted{color:var(--muted);font-size:13px}
+dialog{border:1px solid var(--line);border-radius:14px;background:var(--card);color:var(--text);width:min(680px,94vw);padding:18px}
 dialog::backdrop{background:#0008}
 .file{border:1px solid var(--line);border-radius:10px;padding:10px 12px;margin:8px 0}
-.ok{color:var(--ok)}.bad{color:var(--bad)}.warn{color:var(--warn)}.muted{color:var(--muted);font-size:13px}
 .row{display:flex;gap:8px;justify-content:flex-end;margin-top:14px}
-h2{font-size:16px;margin:18px 0 8px}
+h2{font-size:16px;margin:18px 0 8px}h3{font-size:14px;margin:14px 0 6px}
 .msel{position:relative}.msel summary{cursor:pointer;background:var(--card);border:1px solid var(--line);border-radius:8px;padding:6px 10px;list-style:none}
 .mpanel{position:absolute;z-index:5;inset-inline-start:0;top:110%;background:var(--card);border:1px solid var(--line);border-radius:10px;padding:8px;min-width:240px;max-height:320px;overflow:auto;box-shadow:0 8px 24px #0003}
 .mpanel label{display:flex;gap:8px;align-items:center;padding:3px 4px;white-space:nowrap}
 .charts{align-items:start;display:grid;grid-template-columns:repeat(auto-fit,minmax(340px,1fr));gap:12px;margin-bottom:16px}
-.cbox{position:relative;height:300px;margin-top:6px}.charts #repBox{height:420px}
+.cbox{position:relative;height:300px;margin-top:6px}
+.tabs{display:flex;flex-wrap:wrap;gap:6px;margin:6px 0 14px;border-bottom:1px solid var(--line)}
+.tabs button{background:transparent;color:var(--muted);border-radius:8px 8px 0 0;border:1px solid transparent;border-bottom:0;padding:8px 14px}
+.tabs button.on{color:var(--text);background:var(--card);border-color:var(--line);font-weight:700}
+.pane{display:none}.pane.on{display:block}
+.prog{display:flex;align-items:center;gap:8px;min-width:150px}.prog .track{flex:1;height:8px;background:var(--line);border-radius:99px;overflow:hidden}
+.prog .fill{height:100%;background:var(--accent)}.prog .fill.over{background:var(--gold)}.prog .pct{color:var(--text);font-variant-numeric:tabular-nums;min-width:48px;text-align:left;direction:ltr}
+.tbar{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-bottom:8px}.tbar input[type=search]{min-width:220px}
+.tgrid input{width:130px}
+@media print{header .bar,.bar,.tabs,.notice,.tbar button,button{display:none!important}body{background:#fff;color:#000}.card,.tablewrap{break-inside:avoid;border-color:#bbb}.pane{display:block!important}.printonly{display:block!important}}
+.printonly{display:none}
 </style>
 </head>
 <body>
 <header>
-  <div><h1 style="display:inline">NEXUS Dashboard</h1><span class="badge" id="version"></span></div>
+  <div><h1 style="display:inline" id="sysName">NEXUS Dashboard</h1><span class="badge" id="version"></span></div>
   <div class="bar" style="margin:0">
     <button id="importBtn">استيراد ملفات دفترة</button>
-    <button class="ghost" id="clearBtn" title="حذف البيانات المحفوظة في هذا المتصفح">حذف البيانات</button>
+    <button class="ghost" id="targetsBtn">الأهداف</button>
+    <button class="ghost" id="settingsBtn">الإعدادات</button>
+    <button class="ghost" id="printBtn">طباعة / PDF</button>
+    <button class="ghost" id="clearBtn" title="حذف الفواتير والسندات المحفوظة في هذا المتصفح">حذف البيانات</button>
   </div>
 </header>
 <main>
-  <div class="notice" id="notice">البيانات محفوظة في هذا المتصفح فقط إلى أن يُربط النظام بقاعدة البيانات المشتركة. لا تُشارك مع المناديب بعد.</div>
+  <div class="notice" id="notice">البيانات محفوظة في هذا المتصفح على هذا الجهاز فقط. صدّر نسخة احتياطية دورياً من «الإعدادات».</div>
+  <div class="printonly"><h2 id="printTitle"></h2></div>
   <div class="bar">
     <label>من <input type="date" id="from"></label>
     <label>إلى <input type="date" id="to"></label>
     <button class="ghost" id="allBtn">كل الفترة</button>
     <details class="msel" id="repSel"><summary id="repSelLabel">كل المناديب</summary><div class="mpanel" id="repList"></div></details>
+    <details class="msel" id="regionSel"><summary id="regionSelLabel">كل المناطق</summary><div class="mpanel" id="regionList"></div></details>
+    <details class="msel" id="posSel"><summary id="posSelLabel">كل المناصب</summary><div class="mpanel" id="posList"></div></details>
     <span class="muted" id="rangeInfo"></span>
   </div>
   <div class="grid" id="kpis"></div>
-  <div class="charts">
-    <div class="card"><div class="l">المبيعات مقابل التحصيل حسب المندوب</div><div class="cbox" id="repBox"><canvas id="repChart"></canvas></div></div>
-    <div class="card"><div class="l">الاتجاه الأسبوعي: المبيعات والمقبوضات</div><div class="cbox"><canvas id="trendChart"></canvas></div></div>
+  <div class="grid" id="targetCards"></div>
+
+  <div class="tabs" id="tabs">
+    <button data-tab="summary" class="on">ملخص الأداء</button>
+    <button data-tab="aging">أكبر العملاء مدينية</button>
+    <button data-tab="invoices">الفواتير (بيانات خام)</button>
+    <button data-tab="payments">السندات (بيانات خام)</button>
   </div>
-  <h2>ملخص أداء المناديب</h2>
-  <div class="tablewrap"><table id="reps"></table></div>
-  <h2>آخر عمليات الاستيراد</h2>
-  <div class="tablewrap"><table id="log"></table></div>
+
+  <section class="pane on" id="pane-summary">
+    <div class="charts">
+      <div class="card"><div class="l">المبيعات مقابل التحصيل حسب المندوب</div><div class="cbox" id="repBox"><canvas id="repChart"></canvas></div></div>
+      <div class="card"><div class="l">الاتجاه الأسبوعي: المبيعات والمقبوضات</div><div class="cbox"><canvas id="trendChart"></canvas></div></div>
+    </div>
+    <div id="alerts"></div>
+    <h2>ملخص أداء المناديب</h2>
+    <div class="tablewrap"><table id="reps"></table></div>
+    <h2>آخر عمليات الاستيراد</h2>
+    <div class="tablewrap"><table id="log"></table></div>
+  </section>
+
+  <section class="pane" id="pane-aging">
+    <p class="muted" id="agingNote"></p>
+    <div class="tbar"><input type="search" id="agingQ" placeholder="بحث باسم العميل"><button class="ghost" data-export="aging">تصدير CSV</button></div>
+    <div class="tablewrap" style="max-height:640px;overflow:auto"><table id="agingTable"></table></div>
+  </section>
+
+  <section class="pane" id="pane-invoices">
+    <div class="tbar"><input type="search" id="invQ" placeholder="بحث: رقم الفاتورة / العميل / المندوب"><button class="ghost" data-export="invoices">تصدير CSV</button><span class="muted" id="invInfo"></span></div>
+    <div class="tablewrap" style="max-height:640px;overflow:auto"><table id="invTable"></table></div>
+    <div class="row" style="justify-content:center"><button class="ghost" id="invMore">عرض المزيد</button></div>
+  </section>
+
+  <section class="pane" id="pane-payments">
+    <div class="tbar"><input type="search" id="payQ" placeholder="بحث: رقم السند / الفاتورة / العميل / المندوب"><button class="ghost" data-export="payments">تصدير CSV</button><span class="muted" id="payInfo"></span></div>
+    <div class="tablewrap" style="max-height:640px;overflow:auto"><table id="payTable"></table></div>
+    <div class="row" style="justify-content:center"><button class="ghost" id="payMore">عرض المزيد</button></div>
+  </section>
 </main>
 
 <dialog id="dlg">
@@ -74,6 +119,27 @@ h2{font-size:16px;margin:18px 0 8px}
   <input type="file" id="files" multiple accept=".csv,.xlsx,.xls">
   <div id="preview"></div>
   <div class="row"><button class="ghost" id="cancelBtn">إغلاق</button><button id="saveBtn" disabled>حفظ في النظام</button></div>
+</dialog>
+
+<dialog id="targetsDlg" style="width:min(760px,96vw)">
+  <h2 style="margin-top:0">الأهداف الشهرية</h2>
+  <div class="bar"><label>الشهر <select id="tMonth"></select></label><label>السنة <input type="number" id="tYear" style="width:90px"></label></div>
+  <div class="tablewrap" style="max-height:50vh;overflow:auto"><table id="tTable" class="tgrid"></table></div>
+  <div class="row"><button class="ghost" id="tClose">إغلاق</button><button id="tSave">حفظ الأهداف</button></div>
+  <div class="muted" id="tMsg"></div>
+</dialog>
+
+<dialog id="settingsDlg" style="width:min(760px,96vw)">
+  <h2 style="margin-top:0">الإعدادات</h2>
+  <h3>اسم النظام</h3>
+  <div class="bar"><input type="text" id="sName" placeholder="اسم النظام" style="min-width:220px"><input type="text" id="sLogo" placeholder="رابط الشعار (اختياري)" style="min-width:260px"></div>
+  <h3>المنطقة والمنصب لكل مندوب</h3>
+  <div class="tablewrap" style="max-height:40vh;overflow:auto"><table id="sTable"></table></div>
+  <datalist id="regionOpts"></datalist><datalist id="posOpts"></datalist>
+  <h3>نسخة احتياطية</h3>
+  <div class="bar"><button class="ghost" id="backupBtn">تصدير كل البيانات (JSON)</button><label class="ghost" style="cursor:pointer;border:1px solid var(--line);border-radius:8px;padding:8px 14px">استرجاع من نسخة<input type="file" id="restoreFile" accept=".json" hidden></label></div>
+  <div class="row"><button class="ghost" id="sClose">إغلاق</button><button id="sSave">حفظ الإعدادات</button></div>
+  <div class="muted" id="sMsg"></div>
 </dialog>
 <script src="vendor/chart.umd.js"></script>
 <script type="module" src="src/app.js"></script>

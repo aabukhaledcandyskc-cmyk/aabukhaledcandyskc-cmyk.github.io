@@ -72,3 +72,42 @@ test('rep filter: empty selection means all, otherwise only chosen reps', () => 
   assert.equal(filterByReps(sales, new Set(['أ'])).length, 2);
   assert.equal(computeKpis(filterByReps(sales, new Set(['ب'])), filterByReps(pays, new Set(['ب']))).receipts, -500);
 });
+
+import { allowedReps, restrictToReps, monthsInRange, targetsByRep, progressPct, agingByCustomer } from '../src/kpi.js';
+test('region/position filters combine with rep filter (all must match)', () => {
+  const meta = new Map([['أ', { region: 'جدة', position: 'مندوب' }], ['ب', { region: 'مكة', position: 'مندوب' }], ['ج', { region: 'جدة', position: 'مشرف' }]]);
+  const all = ['أ', 'ب', 'ج', 'د'];
+  assert.deepEqual([...allowedReps(all, meta, {})].sort(), ['أ', 'ب', 'ج', 'د']);
+  assert.deepEqual([...allowedReps(all, meta, { regions: new Set(['جدة']) })].sort(), ['أ', 'ج']);
+  assert.deepEqual([...allowedReps(all, meta, { regions: new Set(['جدة']), positions: new Set(['مشرف']) })], ['ج']);
+  assert.deepEqual([...allowedReps(all, meta, { regions: new Set(['جدة']), reps: new Set(['ب']) })], []);
+  assert.deepEqual([...allowedReps(all, meta, { regions: new Set(['']) })], ['د']); // reps with no region
+  assert.equal(restrictToReps(sales, new Set(['ب'])).length, 2);
+});
+test('months in range, across year boundary', () => {
+  assert.deepEqual(monthsInRange('2025-11-20', '2026-01-02').map((m) => `${m.year}-${m.month}`), ['2025-11', '2025-12', '2026-1']);
+  assert.deepEqual(monthsInRange('2026-05-01', '2026-05-31'), [{ month: 5, year: 2026 }]);
+  assert.deepEqual(monthsInRange('2026-05-02', '2026-04-01'), []);
+});
+test('targets roll up to the filtered reps and months; progress may exceed 100', () => {
+  const t = [
+    { rep: 'أ', month: 1, year: 2026, salesTarget: 10000, collectionTarget: 8000 },
+    { rep: 'أ', month: 2, year: 2026, salesTarget: 20000, collectionTarget: 15000 },
+    { rep: 'ب', month: 1, year: 2026, salesTarget: 5000, collectionTarget: 5000 },
+    { rep: 'أ', month: 3, year: 2026, salesTarget: 99999, collectionTarget: 99999 },
+  ];
+  const m = targetsByRep(t, new Set(['أ']), monthsInRange('2026-01-15', '2026-02-10'));
+  assert.deepEqual([...m], [['أ', { sales: 30000, collection: 23000 }]]);
+  const all = targetsByRep(t, null, monthsInRange('2026-01-01', '2026-01-31'));
+  assert.equal([...all.values()].reduce((a, x) => a + x.sales, 0), 15000);
+  assert.equal(progressPct(20250, 15000), 135);
+  assert.equal(progressPct(5, 0), null);
+});
+test('aging buckets only positive open balances; customers with credit balance excluded', () => {
+  const S = (customer, date, unpaid) => ({ customer, date, unpaid });
+  const r = agingByCustomer([
+    S('ع1', '2026-10-10', 1000), S('ع1', '2026-09-01', 500), S('ع1', '2026-08-10', 200), S('ع1', '2026-01-01', 100),
+    S('ع2', '2026-10-01', 300), S('ع2', '2026-10-02', -500), S('ع3', '2026-10-17', 50)], '2026-10-18');
+  assert.deepEqual(r.map((c) => c.customer), ['ع1', 'ع3']);
+  assert.deepEqual([r[0].net, r[0].b0, r[0].b30, r[0].b60, r[0].b90, r[0].open], [1800, 1000, 500, 200, 100, 4]);
+});
