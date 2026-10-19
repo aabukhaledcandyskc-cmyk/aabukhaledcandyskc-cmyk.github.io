@@ -45,8 +45,38 @@ h2{font-size:16px;margin:18px 0 8px}h3{font-size:14px;margin:14px 0 6px}
 .prog .fill{height:100%;background:var(--accent)}.prog .fill.over{background:var(--gold)}.prog .pct{color:var(--text);font-variant-numeric:tabular-nums;min-width:48px;text-align:left;direction:ltr}
 .tbar{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-bottom:8px}.tbar input[type=search]{min-width:220px}
 .tgrid input{width:130px}
-@media print{header .bar,.bar,.tabs,.notice,.tbar button,button{display:none!important}body{background:#fff;color:#000}.card,.tablewrap{break-inside:avoid;border-color:#bbb}.pane{display:block!important}.printonly{display:block!important}}
+@page{size:A4 landscape;margin:10mm 8mm 14mm;@bottom-center{content:"صفحة " counter(page) " من " counter(pages);font:9px system-ui,sans-serif;color:#555}}
 .printonly{display:none}
+@media print{
+  /* always print on white, whatever theme is on screen */
+  :root,:root[data-theme=dark],:root:not([data-theme=light]){--bg:#fff;--card:#fff;--text:#111;--muted:#555;--line:#cfd4dc;--accent:#0f766e;--warn:#b45309;--bad:#b42318;--ok:#067647;--gold:#d4a017}
+  *{-webkit-print-color-adjust:exact;print-color-adjust:exact}
+  body{background:#fff;font-size:11px}
+  main{max-width:none;padding:0}
+  /* screen-only tools */
+  header,.bar,.tabs,.notice,.noprint,dialog,button,.row,.msel,#cmpTool,.tbar>*:not(.muted){display:none!important}
+  button.link{display:inline!important;color:#111!important;text-decoration:none!important}
+  body:not([data-tab=summary]) #kpis,body:not([data-tab=summary]) #targetCards{display:none!important} /* list tabs print only their list */
+  .tbar{margin:0 0 4px}
+  /* only the visible tab is printed */
+  .pane{display:none!important}.pane.on{display:block!important}
+  .printonly{display:block!important}
+  .tablewrap{max-height:none!important;overflow:visible!important;border-radius:0}
+  table{font-size:10px}th,td{padding:3px 5px}
+  th{position:static!important}#reps tfoot td{position:static!important;border-top:2px solid #999}
+  thead{display:table-header-group}tfoot{display:table-row-group}tr{break-inside:avoid}
+  h2,h3{break-after:avoid}
+  .card,.charts>*{break-inside:avoid;box-shadow:none}
+  .grid{grid-template-columns:repeat(4,1fr);gap:6px;margin-bottom:8px}
+  .card .v{font-size:16px}
+  .charts{grid-template-columns:1fr;gap:8px}
+  .charts>:last-child{order:-1} /* short trend chart first so page 1 is not left half empty */
+  #repBox{height:400px!important}.cbox{height:250px}
+  #repChart,#trendChart{max-width:100%}
+  .prog .track{border:1px solid #bbb}
+}
+#printHead{border-bottom:2px solid #0f766e;padding:0 0 6px;margin-bottom:8px}
+#printHead .t{font-size:16px;font-weight:700}#printHead .m{font-size:11px;color:#444;margin-top:2px}
 .sortable{cursor:pointer;user-select:none}.sortable:hover{color:var(--text)}
 #reps thead th{background:color-mix(in srgb,var(--accent) 7%,var(--card));text-align:center;vertical-align:middle;border-bottom:1px solid var(--line)}
 #reps thead th:first-child{text-align:start}#reps thead tr:nth-child(1) th{top:0}#reps thead tr:nth-child(2) th{top:37px}
@@ -73,7 +103,7 @@ th:focus-visible,button.link:focus-visible{outline:2px solid var(--accent);outli
 </header>
 <main>
   <div class="notice" id="notice">البيانات محفوظة في هذا المتصفح على هذا الجهاز فقط. صدّر نسخة احتياطية دورياً من «الإعدادات».</div>
-  <div class="printonly"><h2 id="printTitle"></h2></div>
+  <div class="printonly" id="printHead"></div>
   <div class="bar">
     <label>من <input type="date" id="from"></label>
     <label>إلى <input type="date" id="to"></label>
@@ -103,8 +133,8 @@ th:focus-visible,button.link:focus-visible{outline:2px solid var(--accent);outli
     <div id="alerts"></div>
     <h2>ملخص أداء المناديب</h2>
     <div class="tablewrap repwrap"><table id="reps"></table></div>
-    <h2>آخر عمليات الاستيراد</h2>
-    <div class="tablewrap"><table id="log"></table></div>
+    <div class="noprint"><h2>آخر عمليات الاستيراد</h2>
+    <div class="tablewrap"><table id="log"></table></div></div>
   </section>
 
   <section class="pane" id="pane-aging">
@@ -126,6 +156,7 @@ th:focus-visible,button.link:focus-visible{outline:2px solid var(--accent);outli
   </section>
   <section class="pane" id="pane-verify">
     <div id="verifyBody"></div>
+    <div id="cmpTool">
     <h2>مقارنة مع أرقام دفترة الرسمية</h2>
     <p class="muted" id="cmpNote"></p>
     <div class="bar">
@@ -137,6 +168,7 @@ th:focus-visible,button.link:focus-visible{outline:2px solid var(--accent);outli
       <button id="cmpBtn">قارن</button>
     </div>
     <div id="cmpOut"></div>
+    </div>
   </section>
 </main>
 

@@ -138,6 +138,7 @@ const progress = (pct) => (pct === null ? '<span class="muted">—</span>'
   : `<div class="prog"><div class="track"><div class="fill ${pct > 100 ? 'over' : ''}" style="width:${Math.min(100, pct)}%"></div></div><span class="pct">${+pct.toFixed(1)}%</span></div>`);
 
 function render() {
+  document.body.dataset.tab = st.tab; // lets the print stylesheet know which tab is on paper
   const c = current();
   const k = computeKpis(c.s, c.p);
   const card = (l, v, sub = '') => `<div class="card"><div class="l">${l}</div><div class="v">${v}</div><div class="s">${sub}</div></div>`;
@@ -164,7 +165,7 @@ function render() {
   $('alerts').innerHTML = low.length ? `<div class="notice">تنبيه: نسبة التحصيل أقل من 50% عند: ${low.map((r) => `${escapeHtml(r.rep)} (${r.paidPct.toFixed(1)}%)`).join('، ')}</div>` : '';
   renderCharts(reps, weeklyTrend(c.s, c.p));
   $('rangeInfo').textContent = st.sales.length ? `${int(c.s.length)} صف مبيعات، ${int(c.p.length)} سند ضمن الفلاتر` : '';
-  $('printTitle').textContent = `${st.system.name} — الفترة من ${c.from} إلى ${c.to}`;
+  renderPrintHead(c);
   renderPane(c);
 }
 
@@ -222,12 +223,24 @@ function openRepCard(rep) {
   $('repCard').showModal();
 }
 
+const TAB_TITLE = { summary: 'ملخص الأداء', aging: 'أكبر العملاء مدينية', invoices: 'الفواتير', payments: 'السندات', verify: 'التحقق من الأرقام' };
+// Report header shown only on paper: who/what/when, and which filters produced the numbers.
+function renderPrintHead(c) {
+  const f = (set, all) => (set.size ? [...set].map((x) => x || 'غير محدد').join('، ') : all);
+  const logo = st.system.logo ? `<img src="${escapeHtml(st.system.logo)}" alt="" height="30" style="vertical-align:middle;margin-inline-end:8px">` : '';
+  $('printHead').innerHTML = `<div class="t">${logo}${escapeHtml(st.system.name)} — ${TAB_TITLE[st.tab]}</div>
+    <div class="m">الفترة: من <bdi dir="ltr">${c.from || '—'}</bdi> إلى <bdi dir="ltr">${c.to || '—'}</bdi> &nbsp;|&nbsp; المناديب: ${escapeHtml(f(st.sel.reps, 'الكل'))} &nbsp;|&nbsp; المناطق: ${escapeHtml(f(st.sel.regions, 'الكل'))} &nbsp;|&nbsp; المناصب: ${escapeHtml(f(st.sel.positions, 'الكل'))}</div>
+    <div class="m">طُبع في <bdi dir="ltr">${new Date().toLocaleString('en-GB', { dateStyle: 'short', timeStyle: 'short' })}</bdi> &nbsp;|&nbsp; الإصدار ${NEXUS_VERSION}</div>`;
+}
+
 function renderCharts(reps, trend) {
   if (!window.Chart) return;
   const css = getComputedStyle(document.documentElement);
-  const text = css.getPropertyValue('--text').trim(), grid = css.getPropertyValue('--line').trim(), accent = css.getPropertyValue('--accent').trim(), warn = css.getPropertyValue('--warn').trim();
+  const light = st.printing; // paper is always white, so draw the charts with the light palette
+  const text = light ? '#111' : css.getPropertyValue('--text').trim(), grid = light ? '#d5d9e0' : css.getPropertyValue('--line').trim();
+  const accent = light ? '#0f766e' : css.getPropertyValue('--accent').trim(), warn = light ? '#b45309' : css.getPropertyValue('--warn').trim();
   const fmt = (v) => Number(v).toLocaleString('en-US', { maximumFractionDigits: 0 });
-  const common = { responsive: true, maintainAspectRatio: false, plugins: { legend: { labels: { color: text } } } };
+  const common = { responsive: true, maintainAspectRatio: false, animation: light ? false : undefined, plugins: { legend: { labels: { color: text } } } };
   const axis = (ticks = {}) => ({ ticks: { color: text, ...ticks }, grid: { color: grid } });
   const top = reps.filter((r) => r.sales > 0);
   $('repBox').style.height = `${Math.max(260, top.length * 30 + 80)}px`;
@@ -424,6 +437,9 @@ $('from').onchange = $('to').onchange = render;
 $('allBtn').onclick = () => { const d = [...st.sales, ...st.payments].map((r) => r.date).sort(); $('from').value = d[0] ?? ''; $('to').value = d.at(-1) ?? ''; render(); };
 $('clearBtn').onclick = async () => { if (confirm('حذف الفواتير والسندات المحفوظة في هذا المتصفح؟ (الأهداف والإعدادات تبقى). تأكد من أخذ نسخة احتياطية أولاً.')) { await browserStore.clear(); await refresh(true); } };
 $('printBtn').onclick = () => window.print();
+// beforeprint also fires for Ctrl+P, so both routes get the white-paper charts and an up-to-date header.
+window.addEventListener('beforeprint', () => { st.printing = true; render(); });
+window.addEventListener('afterprint', () => { st.printing = false; render(); });
 function toggleSort(th) {
   const key = th?.dataset.sort; if (!key) return;
   const textual = ['rep', 'region', 'position'].includes(key);
