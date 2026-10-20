@@ -103,7 +103,7 @@ svg text{font-family:var(--font-body);fill:var(--fg)}
     <h2 class="sec">المخطط</h2>
     <div class="filters" id="filters" role="group" aria-label="تصفية حسب الحالة" style="margin-bottom:12px"></div>
     <div class="plan"><svg id="svg" viewBox="0 0 652 743" role="img" aria-label="مخطط أرضي للشقة"></svg></div>
-    <p class="note" style="margin-top:8px">جدار الشباك في الأعلى. الخط المتقطع يعني قطعة تحتاج تأكيداً. الأرقام تقديرية: القياسات الظاهرة في التسجيل مقاطع من جدران وليست أبعاداً كاملة مؤكدة، فأعد قياس كل جدار بشريط قياس قبل شراء أي أثاث ثابت.</p>
+    <p class="note" style="margin-top:8px">جدار الشباك في الأعلى. الخط المتقطع يعني قطعة تحتاج تأكيداً، والسهم الأخضر هو طريق الدخول من باب الشقة إلى الحمام. الأرقام تقديرية: القياسات الظاهرة في التسجيل مقاطع من جدران وليست أبعاداً كاملة مؤكدة، فأعد قياس كل جدار بشريط قياس قبل شراء أي أثاث ثابت.</p>
   </section>
 
   <div class="sum" id="sum"></div>
@@ -144,13 +144,13 @@ var ITEMS=[
   {room:"main",name:"مكيف مستعمل",note:"أعلى يسار الغرفة، في فتحة المكيف القديمة",st:"used",x:.1,y:.04,w:.75,h:.22},
   {room:"main",name:"كنبة بنية",note:"في الزاوية اليمنى العليا بجانب الجدار",st:"ok",x:3.5,y:.05,w:.85,h:.85,lbl:"كنبة"},
   {room:"main",name:"دولاب غرفة نوم",note:"على الجدار الأيمن، مستعمل",st:"used",x:3.8,y:1.05,w:.55,h:1.8,lbl:"دولاب"},
+  {room:"main",name:"ثلاجة",note:"على الجدار السفلي للغرفة بجانب بابها مباشرة: قريبة من المطبخ، وبعيدة عن السرير، ولا تسد الممر",st:"ok",x:1.2,y:2.75,w:.6,h:.65,lbl:"ثلاجة"},
   {room:"main",name:"مكيف ثانٍ",note:"ذكرته في الوصف، ولم أجد له موضعاً في رسمك",st:"check",noshape:true},
-  {room:"kit",name:"ثلاجة",note:"خارج المطبخ قرب المدخل",st:"ok",x:2.35,y:3.5,w:.6,h:.6,lbl:"ثلاجة"},
-  {room:"kit",name:"طاولة تحضير",note:"على الجدار العلوي للممر، يلزم تأكيد وجودها",st:"check",x:1.3,y:3.45,w:.9,h:.45,lbl:"طاولة"},
-  {room:"kit",name:"دولاب مطبخ علوي وسفلي",note:"على الجدار السفلي، مستعمل",st:"used",x:.95,y:4.5,w:.9,h:.55,lbl:"دولاب"},
-  {room:"kit",name:"أسطوانة غاز",note:"بين الدولاب والموقد",st:"new",shape:"c",x:2.05,y:4.8,r:.15},
-  {room:"kit",name:"منظم غاز + ليّ غاز",note:"فوق الأسطوانة ويصلها بالموقد",st:"new",x:1.95,y:4.28,w:.24,h:.2},
-  {room:"kit",name:"موقد غاز",note:"يلزم تأكيد وجوده",st:"check",x:2.3,y:4.5,w:.55,h:.55,lbl:"موقد"},
+  {room:"kit",name:"طاولة تحضير",note:"لا تتسع في الممر مع بقاء طريق مشي مريح. استعمل عربة صغيرة أو سطح الدولاب",st:"check",noshape:true},
+  {room:"kit",name:"دولاب مطبخ علوي وسفلي",note:"على الجدار السفلي بعد باب الشقة، مستعمل",st:"used",x:1.05,y:4.5,w:.85,h:.55,lbl:"دولاب"},
+  {room:"kit",name:"أسطوانة غاز",note:"في الركن بجانب البوتجاز، بعيداً عن باب الحمام",st:"new",shape:"c",x:2.7,y:4.93,r:.15},
+  {room:"kit",name:"منظم غاز + ليّ غاز",note:"فوق الأسطوانة ويصلها بالبوتجاز",st:"new",x:2.62,y:4.3,w:.22,h:.2},
+  {room:"kit",name:"بوتجاز",note:"على الجدار السفلي بجانب الدولاب. يلزم تأكيد وجوده",st:"check",x:1.95,y:4.5,w:.55,h:.55,lbl:"بوتجاز"},
   {room:"bath",name:"غسالة (حوضين)",note:"في الزاوية السفلية اليسرى",st:"ok",x:3.05,y:4.5,w:.6,h:.52,lbl:"غسالة"},
   {room:"bath",name:"مناشف",note:"علّاقة على الجدار السفلي",st:"new",x:3.8,y:4.98,w:.5,h:.08},
   {room:"bath",name:"سلة مهملات",note:"قرب الباب بعيداً عن الدش",st:"new",shape:"c",x:3.95,y:4.65,r:.1},
@@ -174,7 +174,12 @@ function door(gx1,gy1,gx2,gy2,hx,hy,lx,ly,ax,ay,sweep){
 }
 door(.1,3.4,1.1,3.4, .1,3.4, .1,2.4, 1.1,3.4, 1);       /* بين الغرفة والممر */
 door(.12,5.1,.95,5.1, .12,5.1, .12,4.27, .95,5.1, 1);   /* باب الشقة */
-door(3,3.5,3,4.2, 3,3.5, 3.7,3.5, 3,4.2, 1);            /* باب الحمام */
+door(3,3.5,3,4.2, 3,3.5, 2.3,3.5, 3,4.2, 0);            /* باب الحمام يفتح نحو الممر */
+svg.appendChild(el("defs",{}));
+var mk=el("marker",{id:"ar",viewBox:"0 0 10 10",refX:8,refY:5,markerWidth:7,markerHeight:7,orient:"auto-start-reverse"});
+mk.appendChild(el("path",{d:"M0 0L10 5L0 10z",fill:"var(--ok)"}));
+svg.querySelector("defs").appendChild(mk);
+svg.appendChild(el("path",{d:"M"+X(.55)+" "+Y(5.0)+" L"+X(.55)+" "+Y(4.0)+" L"+X(2.85)+" "+Y(4.0),fill:"none",stroke:"var(--ok)","stroke-width":2.5,"stroke-dasharray":"2 6","stroke-linecap":"round","marker-end":"url(#ar)"}));
 svg.appendChild(el("line",{x1:X(1.5),y1:Y(0),x2:X(2.6),y2:Y(0),stroke:"var(--new)","stroke-width":8}));
 svg.appendChild(el("line",{x1:X(1.5),y1:Y(0),x2:X(2.6),y2:Y(0),stroke:"var(--room)","stroke-width":2.5}));
 svg.appendChild(el("text",{x:X(2.05),y:Y(0)-12,class:"fixl"},"شباك (جدار النافذة)"));
