@@ -138,3 +138,28 @@ test('monthly breakdown groups by YYYY-MM and sorts ascending', () => {
   assert.deepEqual([m[0].sales, m[0].receipts, m[0].invoices], [15000, 7000, 2]);
   assert.deepEqual([m[1].sales, m[1].receipts, m[1].invoices], [1000, -500, 1]);
 });
+
+import { firstInvoices, newCustomersByRep, newCustomersUnreliable } from '../src/kpi.js';
+test('new customers: first real invoice decides, credited to the rep who issued it', () => {
+  const S = (customer, date, rep, total = 100, number = date) => ({ customer, date, rep, total, number });
+  const all = [
+    S('ع1', '2026-01-05', 'أ'), S('ع1', '2026-02-10', 'ب'),            // ع1 first seen in Jan with أ, later buys from ب
+    S('ع2', '2026-02-03', 'ب'), S('ع2', '2026-02-03', 'أ', 50, 'z'),   // same day: lowest number wins ('2026-02-03' < 'z')
+    S('ع3', '2026-01-20', 'أ', -80),                                    // credit note does not make a customer
+    S('ع3', '2026-03-01', 'ب'),
+    S('', '2026-02-01', 'أ'),                                           // nameless rows ignored
+  ];
+  const first = firstInvoices(all);
+  assert.deepEqual([...first.keys()].sort(), ['ع1', 'ع2', 'ع3']);
+  assert.equal(first.get('ع3').date, '2026-03-01');
+  assert.deepEqual([...newCustomersByRep(first, { from: '2026-02-01', to: '2026-02-28' }, null)], [['ب', 1]]);
+  assert.deepEqual([...newCustomersByRep(first, { from: '2026-01-01', to: '2026-03-31' }, new Set(['أ']))], [['أ', 1]]);
+  assert.deepEqual([...newCustomersByRep(first, {}, null)].sort(), [['أ', 1], ['ب', 2]]);
+});
+test('new-customer figure is flagged unreliable near the start of the data', () => {
+  const all = [{ date: '2025-07-14' }, { date: '2026-01-01' }];
+  assert.equal(newCustomersUnreliable(all, '2025-07-14'), true);
+  assert.equal(newCustomersUnreliable(all, '2025-09-01'), true);   // 49 days in
+  assert.equal(newCustomersUnreliable(all, '2025-11-01'), false);  // 110 days in
+  assert.equal(newCustomersUnreliable([], '2025-11-01'), false);
+});

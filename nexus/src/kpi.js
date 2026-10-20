@@ -145,3 +145,33 @@ export function agingByCustomer(sales, asOf) {
   }
   return [...by.values()].filter((c) => c.net > 0).sort((a, b) => b.net - a.net);
 }
+
+// ---- new customers: a customer is "new" in the period if its first real invoice (total > 0) in ALL imported
+// data falls inside it. It is credited to the rep who issued that first invoice. Based on invoices only, so it is
+// an approximation until a customer master with creation dates is imported.
+export function firstInvoices(allSales) {
+  const first = new Map();
+  for (const s of allSales) {
+    if (s.total <= 0 || !s.customer) continue;
+    const f = first.get(s.customer);
+    if (!f || s.date < f.date || (s.date === f.date && s.number < f.number)) first.set(s.customer, { date: s.date, rep: s.rep, number: s.number });
+  }
+  return first;
+}
+
+export function newCustomersByRep(first, { from, to }, allowed) {
+  const out = new Map();
+  for (const f of first.values()) {
+    if ((from && f.date < from) || (to && f.date > to)) continue;
+    if (allowed && !allowed.has(f.rep)) continue;
+    out.set(f.rep, (out.get(f.rep) ?? 0) + 1);
+  }
+  return out;
+}
+
+// True when the period starts so close to the first imported invoice that "first invoice" cannot mean "new".
+export function newCustomersUnreliable(allSales, from, graceDays = 90) {
+  if (!allSales.length || !from) return false;
+  const start = allSales.reduce((m, s) => (s.date < m ? s.date : m), allSales[0].date);
+  return daysBetween(from, start) < graceDays;
+}

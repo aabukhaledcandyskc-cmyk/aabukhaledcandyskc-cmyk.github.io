@@ -4,6 +4,7 @@ import { browserStore } from './store.js';
 import {
   computeKpis, repSummary, totalsRow, sortRows, monthlyBreakdown, filterByPeriod, weeklyTrend, allowedReps, restrictToReps,
   monthsInRange, targetsByRep, targetKey, progressPct, agingByCustomer,
+  firstInvoices, newCustomersByRep, newCustomersUnreliable,
 } from './kpi.js';
 import { toCents, fromCents } from './shared.js';
 import { parseLedger } from './ledger.js';
@@ -22,7 +23,7 @@ const SYSTEM_KEY = '__system';
 
 const st = {
   sales: [], payments: [], meta: new Map(), targets: [], system: { name: 'NEXUS Dashboard', logo: '' },
-  sel: { reps: new Set(), regions: new Set(), positions: new Set(), statuses: new Set() }, ledger: null, theme: null,
+  sel: { reps: new Set(), regions: new Set(), positions: new Set(), statuses: new Set() }, ledger: null, theme: null, first: new Map(),
   tab: 'summary', repSort: { key: 'sales', dir: 'desc' }, invLimit: 300, payLimit: 300, pending: [], charts: {},
 };
 
@@ -141,6 +142,9 @@ function render() {
   document.body.dataset.tab = st.tab; // lets the print stylesheet know which tab is on paper
   const c = current();
   const k = computeKpis(c.s, c.p);
+  const newBy = newCustomersByRep(st.first, { from: c.from, to: c.to }, c.allowed);
+  const totalNew = [...newBy.values()].reduce((a, x) => a + x, 0);
+  const newUnreliable = newCustomersUnreliable(st.sales, c.from);
   const card = (l, v, sub = '') => `<div class="card"><div class="l">${l}</div><div class="v">${v}</div><div class="s">${sub}</div></div>`;
   $('kpis').innerHTML = [
     card('إجمالي المبيعات', money(k.sales)),
@@ -151,6 +155,7 @@ function render() {
     card('عدد الفواتير', int(k.invoiceCount)),
     card('العملاء النشطون', int(k.activeCustomers)),
     card('متوسط الفاتورة', money(k.avgInvoice)),
+    card('عملاء جدد', int(totalNew), newUnreliable ? '⚠ الفترة قريبة من بداية بياناتك، فيُحسب أغلب العملاء جدداً' : 'أول فاتورة للعميل ضمن الفترة'),
   ].join('') + (k.discrepancies ? card('تناقضات', int(k.discrepancies), 'total ≠ paid+unpaid+returns') : '');
 
   const tmap = targetsByRep(st.targets, c.allowed, monthsInRange(c.from, c.to));
@@ -160,7 +165,7 @@ function render() {
   ].map(([l, t, a]) => `<div class="card"><div class="l">${l}</div><div class="s">المستهدف ${money(t)} — الفعلي ${money(a)}</div>${progress(progressPct(a, t))}</div>`).join('') : '';
 
   const reps = repSummary(c.s, c.p);
-  renderRepTable(reps, tmap);
+  renderRepTable(reps, tmap, newBy);
   const low = reps.filter((r) => r.sales > 0 && r.paidPct < 50);
   $('alerts').innerHTML = low.length ? `<div class="notice">تنبيه: نسبة التحصيل أقل من 50% عند: ${low.map((r) => `${escapeHtml(r.rep)} (${r.paidPct.toFixed(1)}%)`).join('، ')}</div>` : '';
   renderCharts(reps, weeklyTrend(c.s, c.p));
@@ -179,13 +184,13 @@ function sortTh(key, label, extra = '') {
   const arrow = on ? (st.repSort.dir === 'asc' ? ' ▲' : ' ▼') : '';
   return `<th class="sortable ${extra}" data-sort="${key}" tabindex="0" role="columnheader" aria-sort="${on ? (st.repSort.dir === 'asc' ? 'ascending' : 'descending') : 'none'}">${label}${arrow}</th>`;
 }
-function renderRepTable(reps, tmap) {
-  const rows = sortRows(reps.map((r) => ({ ...r, ...(st.meta.get(r.rep) ?? {}), tSales: progressPct(r.sales, tmap.get(r.rep)?.sales ?? 0), tColl: progressPct(r.receipts, tmap.get(r.rep)?.collection ?? 0) })), st.repSort.key, st.repSort.dir);
-  const tot = totalsRow(reps);
+function renderRepTable(reps, tmap, newBy) {
+  const rows = sortRows(reps.map((r) => ({ ...r, newCust: newBy.get(r.rep) ?? 0, ...(st.meta.get(r.rep) ?? {}), tSales: progressPct(r.sales, tmap.get(r.rep)?.sales ?? 0), tColl: progressPct(r.receipts, tmap.get(r.rep)?.collection ?? 0) })), st.repSort.key, st.repSort.dir);
+  const tot = { ...totalsRow(reps), newCust: [...newBy.values()].reduce((a, x) => a + x, 0) };
   const hasTargets = tmap.size > 0;
   const line = (r, isTotal) => `<tr class="${isTotal ? 'total' : ''}"><td>${isTotal ? '<b>الإجمالي</b>' : `<button class="link" data-rep="${escapeHtml(r.rep)}" aria-label="بطاقة ${escapeHtml(r.rep)}">${escapeHtml(r.rep)}</button>`}</td>
     <td class="n">${money(r.sales)}</td><td class="n">${money(r.paid)}</td><td class="n">${money(r.unpaid)}</td><td class="n">${money(r.receipts)}</td>
-    <td class="n ${!isTotal && r.paidPct < 50 ? 'low' : ''}">${r.paidPct.toFixed(1)}%</td><td class="n">${int(r.invoices)}</td><td class="n">${pctText(r.returnRate)}</td>
+    <td class="n ${!isTotal && r.paidPct < 50 ? 'low' : ''}">${r.paidPct.toFixed(1)}%</td><td class="n">${int(r.invoices)}</td><td class="n">${int(r.newCust)}</td><td class="n">${pctText(r.returnRate)}</td>
     <td>${isTotal ? '' : escapeHtml(r.region ?? '')}</td><td>${isTotal ? '' : escapeHtml(r.position ?? '')}</td>
     <td>${isTotal ? '' : progress(hasTargets ? r.tSales : null)}</td><td>${isTotal ? '' : progress(hasTargets ? r.tColl : null)}</td></tr>`;
   $('reps').innerHTML = `<thead>
@@ -194,11 +199,12 @@ function renderRepTable(reps, tmap) {
       ${sortTh('receipts', 'التحصيلات المسجلة', 'n').replace('<th ', '<th rowspan="2" ')}
       ${sortTh('paidPct', 'نسبة التحصيل', 'n').replace('<th ', '<th rowspan="2" title="المدفوع من فواتير الفترة ÷ إجمالي المبيعات. التحصيلات المسجلة تشمل سندات فواتير فترات سابقة، لذلك قد تختلف عنه." ')}
       ${sortTh('invoices', 'عدد الفواتير', 'n').replace('<th ', '<th rowspan="2" ')}
+      ${sortTh('newCust', 'عملاء جدد', 'n').replace('<th ', '<th rowspan="2" title="عملاء كانت أول فاتورة لهم ضمن الفترة، وتُنسب للمندوب الذي أصدرها. تعتمد على الفواتير المستوردة فقط." ')}
       ${sortTh('returnRate', 'معدل المرتجعات', 'n').replace('<th ', '<th rowspan="2" title="المرتجعات (مجموع عمود المرتجع الخام) ÷ مبيعات الفواتير الموجبة. قد يظهر سالباً إذا سُجّلت فاتورة المرتجع عند مندوب أو في فترة غير فاتورتها الأصلية." ')}
       <th colspan="4" class="grp">التصنيف والأهداف</th></tr>
     <tr>${REP_COLS.map((c) => sortTh(c.key, c.label, 'n sub')).join('')}
       ${sortTh('region', 'المنطقة', 'sub')}${sortTh('position', 'المنصب', 'sub')}${sortTh('tSales', 'هدف المبيعات', 'sub')}${sortTh('tColl', 'هدف التحصيل', 'sub')}</tr></thead>
-    <tbody>${rows.map((r) => line(r, false)).join('') || '<tr><td colspan="12" class="muted">لا توجد بيانات — استورد ملفات دفترة أولاً</td></tr>'}</tbody>
+    <tbody>${rows.map((r) => line(r, false)).join('') || '<tr><td colspan="13" class="muted">لا توجد بيانات — استورد ملفات دفترة أولاً</td></tr>'}</tbody>
     ${rows.length ? `<tfoot>${line(tot, true)}</tfoot>` : ''}`;
 }
 
@@ -215,6 +221,7 @@ function openRepCard(rep) {
   $('repCardBody').innerHTML = `<div class="grid">${[
     card('إجمالي المبيعات', money(k.sales)), card('مدفوعة', money(k.paid), `${k.paidPct.toFixed(1)}%`), card('غير مدفوعة', money(k.unpaid)),
     card('التحصيلات المسجلة', money(k.receipts)), card('عدد الفواتير', int(k.invoiceCount)), card('العملاء النشطون', int(k.activeCustomers)),
+    card('عملاء جدد', int(newCustomersByRep(st.first, { from: c.from, to: c.to }, new Set([rep])).get(rep) ?? 0), 'أول فاتورة ضمن الفترة'),
     card('معدل المرتجعات', gross > 0 ? `${((k.returns / gross) * 100).toFixed(1)}%` : '—', `المرتجعات ${money(k.returns)}`),
   ].join('')}</div>
   <h3>الأداء الشهري</h3><div class="tablewrap" style="max-height:240px;overflow:auto"><table><tr><th>الشهر</th><th class="n">المبيعات</th><th class="n">مدفوعة</th><th class="n">غير مدفوعة</th><th class="n">المقبوضات</th><th class="n">الفواتير</th></tr>${monthlyBreakdown(s, p).map((x) => `<tr><td>${x.month}</td><td class="n">${money(x.sales)}</td><td class="n">${money(x.paid)}</td><td class="n">${money(x.unpaid)}</td><td class="n">${money(x.receipts)}</td><td class="n">${int(x.invoices)}</td></tr>`).join('')}</table></div>
@@ -418,6 +425,7 @@ function decodeSeed(d) {
 async function refresh(resetRange = false) {
   [st.sales, st.payments, st.targets] = await Promise.all([browserStore.loadAll('sales'), browserStore.loadAll('payments'), browserStore.loadAll('targets')]);
   await loadMeta(); applySystem();
+  st.first = firstInvoices(st.sales);
   const metaRows = await browserStore.loadAll('meta');
   st.ledger = metaRows.find((m) => m.key === 'ledger')?.data ?? null;
   st.controls = metaRows.find((m) => m.key === 'controls')?.data ?? null;
