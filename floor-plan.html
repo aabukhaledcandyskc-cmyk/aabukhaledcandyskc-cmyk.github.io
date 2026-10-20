@@ -151,10 +151,10 @@ var ITEMS=[
   {room:"kit",name:"أسطوانة غاز",note:"في الركن بجانب البوتجاز، بعيداً عن باب الحمام",st:"new",shape:"c",x:2.7,y:4.93,r:.15},
   {room:"kit",name:"منظم غاز + ليّ غاز",note:"فوق الأسطوانة ويصلها بالبوتجاز",st:"new",x:2.62,y:4.3,w:.22,h:.2},
   {room:"kit",name:"بوتجاز",note:"على الجدار السفلي بجانب الدولاب. يلزم تأكيد وجوده",st:"check",x:1.95,y:4.5,w:.55,h:.55,lbl:"بوتجاز"},
-  {room:"bath",name:"غسالة (حوضين)",note:"الزاوية العليا اليمنى، بعيدة عن الدش والمرحاض، وقريبة من الباب لسهولة التفريغ",st:"ok",x:3.75,y:3.45,w:.62,h:.5,lbl:"غسالة"},
-  {room:"bath",name:"مناشف",note:"علّاقة على الجدار الأيمن في المنطقة الجافة",st:"new",x:4.3,y:4.05,w:.08,h:.5},
-  {room:"bath",name:"سلة مهملات",note:"بين الغسالة والمغسلة، بعيدة عن الدش",st:"new",shape:"c",x:4.12,y:4.42,r:.09},
-  {room:"bath",name:"فرشاة تنظيف",note:"بجانب المرحاض",st:"new",shape:"c",x:3.75,y:4.72,r:.06}
+  {room:"bath",name:"غسالة (حوضين)",note:"الزاوية السفلية اليسرى، بعيدة عن الباب وعن منطقة الدش",st:"ok",x:3.05,y:4.55,w:.62,h:.5,lbl:"غسالة"},
+  {room:"bath",name:"مناشف",note:"علّاقة على الجدار الأيمن تحت المغسلة",st:"new",x:4.3,y:3.82,w:.08,h:.32},
+  {room:"bath",name:"سلة مهملات",note:"تحت المغسلة، بعيدة عن الدش",st:"new",shape:"c",x:4.1,y:4.03,r:.08},
+  {room:"bath",name:"فرشاة تنظيف",note:"بجانب المرحاض",st:"new",shape:"c",x:3.88,y:4.72,r:.05}
 ];
 var NS="http://www.w3.org/2000/svg";
 function el(t,a,txt){var e=document.createElementNS(NS,t);for(var k in a)e.setAttribute(k,a[k]);if(txt!=null)e.textContent=txt;return e}
@@ -184,15 +184,15 @@ svg.appendChild(el("line",{x1:X(1.5),y1:Y(0),x2:X(2.6),y2:Y(0),stroke:"var(--new
 svg.appendChild(el("line",{x1:X(1.5),y1:Y(0),x2:X(2.6),y2:Y(0),stroke:"var(--room)","stroke-width":2.5}));
 svg.appendChild(el("text",{x:X(2.05),y:Y(0)-12,class:"fixl"},"شباك (جدار النافذة)"));
 svg.appendChild(el("text",{x:X(.54),y:Y(5.1)+20,class:"fixl"},"باب الشقة"));
-/* الحمام: منطقة مبللة (مرحاض + دش + مصرف) في الزاوية السفلية اليسرى، المغسلة على الجدار السفلي، الغسالة في الزاوية العليا اليمنى */
-svg.appendChild(el("rect",{x:X(3.05),y:Y(4.2),width:1.0*S,height:.88*S,rx:6,fill:"none",stroke:"var(--new)","stroke-width":1.5,"stroke-dasharray":"5 4"}));
-svg.appendChild(el("text",{x:X(3.55),y:Y(4.2)+14,class:"fixl"},"منطقة الدش"));
-fix(3.2,4.5,.4,.58,"",10);
-svg.appendChild(el("text",{x:X(3.4),y:Y(4.5)+Math.round(.58*S/2)+4,class:"fixl"},"مرحاض"));
-fix(3.64,4.92,.1,.12,"",2);
-svg.appendChild(el("circle",{cx:X(3.85),cy:Y(4.55),r:6,class:"fix"}));
-fix(4.0,4.78,.36,.3,"",12);
-svg.appendChild(el("text",{x:X(4.18),y:Y(4.78)-5,class:"fixl"},"مغسلة"));
+/* الحمام: المغسلة في الزاوية العليا اليمنى، المرحاض والدش في الزاوية السفلية اليمنى، الغسالة في الزاوية السفلية اليسرى */
+fix(4.0,3.45,.36,.3,"",12);
+svg.appendChild(el("text",{x:X(3.95),y:Y(3.6),class:"fixl",style:"text-anchor:end"},"مغسلة"));
+svg.appendChild(el("rect",{x:X(3.75),y:Y(4.2),width:.65*S,height:.9*S,rx:6,fill:"none",stroke:"var(--new)","stroke-width":1.5,"stroke-dasharray":"5 4"}));
+svg.appendChild(el("text",{x:X(4.07),y:Y(4.2)+14,class:"fixl"},"منطقة الدش"));
+fix(3.95,4.5,.4,.58,"",10);
+svg.appendChild(el("text",{x:X(4.15),y:Y(4.5)+Math.round(.58*S/2)+4,class:"fixl"},"مرحاض"));
+fix(3.8,4.92,.1,.12,"",2);
+svg.appendChild(el("circle",{cx:X(3.86),cy:Y(4.4),r:6,class:"fix"}));
 ROOMS.forEach(function(r){
   svg.appendChild(el("text",{x:X(r.lx),y:Y(r.ly),class:"room-name"},r.name));
   if(r.size)svg.appendChild(el("text",{x:X(r.lx),y:Y(r.ly)+17,class:"room-size"},r.size));
