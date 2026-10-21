@@ -9,11 +9,12 @@ const root = new URL('..', import.meta.url).pathname;
 const read = (p) => fs.readFileSync(root + p, 'utf8');
 const data = dataFile ? JSON.parse(fs.readFileSync(dataFile, 'utf8')) : null;
 
+const stamp = new Date().toISOString().slice(0, 16).replace('T', ' ');
 const strip = (src) => src
   .replace(/^import[\s\S]*?from\s+['"][^'"]+['"];?\n/gm, '')
   .replace(/^export\s+(async\s+)?(function|const|class)/gm, '$1$2');
 const modules = ['csv', 'shared', 'daftra', 'ledger', 'store', 'kpi', 'verify', 'excel', 'report', 'config', 'app']
-  .map((f) => strip(read(`src/${f}.js`))).join('\n');
+  .map((f) => strip(read(`src/${f}.js`))).join('\n').replace("const NEXUS_BUILD = 'dev'", `const NEXUS_BUILD = '${stamp}'`);
 const inline = (file) => `<script>${read(file).replaceAll('</script', '<\\/script')}</script>`;
 
 let html = read('index.html');

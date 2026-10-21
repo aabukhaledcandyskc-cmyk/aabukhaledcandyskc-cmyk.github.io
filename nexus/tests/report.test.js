@@ -100,11 +100,14 @@ test('rep insights never show a percent change off a negative base', () => {
   const r = repInsights({ rep: 'أ', k: { sales: -100, paidPct: 0 }, pk: { sales: 50 }, company: { sales: 0, paidPct: 0 }, rank: 1, repCount: 1, newCust: 0, monthly: [], debtors: [], overpaid: 0 }, fmt);
   assert.equal(r.some((x) => /الفترة السابقة/.test(x.text)), false);
 });
-test('report mode: auto goes one-page for up to three reps, override wins', () => {
+test('report mode: one sheet for up to three reps (selected or with data), override wins', () => {
   assert.equal(reportMode('auto', 1), 'compact');
   assert.equal(reportMode('auto', 3), 'compact');
   assert.equal(reportMode('auto', 4), 'full');
-  assert.equal(reportMode('auto', 0), 'full');
+  assert.equal(reportMode('auto', 0), 'compact');            // empty period: one empty sheet, not three
+  assert.equal(reportMode('auto', 0, 1), 'compact');         // a rep is selected but had no activity (e.g. a Friday)
+  assert.equal(reportMode('auto', 12, 2), 'compact');        // selection decides even if other data exists
+  assert.equal(reportMode('auto', 12, 4), 'full');
   assert.equal(reportMode('compact', 20), 'compact');
-  assert.equal(reportMode('full', 1), 'full');
+  assert.equal(reportMode('full', 1, 1), 'full');
 });

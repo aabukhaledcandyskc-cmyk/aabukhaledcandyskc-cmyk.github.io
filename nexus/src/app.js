@@ -4,14 +4,14 @@ import { browserStore } from './store.js';
 import {
   computeKpis, repSummary, totalsRow, sortRows, monthlyBreakdown, filterByPeriod, weeklyTrend, allowedReps, restrictToReps,
   monthsInRange, targetsByRep, targetKey, progressPct, agingByCustomer,
-  firstInvoices, newCustomersByRep, newCustomersUnreliable, topCustomers,
+  firstInvoices, newCustomersByRep, newCustomersUnreliable, topCustomers, periodBreakdown,
 } from './kpi.js';
 import { toCents, fromCents } from './shared.js';
 import { parseLedger } from './ledger.js';
 import { buildChecks, compactLedger, compareWithDaftra } from './verify.js';
 import { rowsFromWorkbook, workbookFromRows } from './excel.js';
 import { previousPeriod, deltaPct, presetRange, topWithOthers, insights, repInsights, reportMode } from './report.js';
-import { NEXUS_VERSION } from './config.js';
+import { NEXUS_VERSION, NEXUS_BUILD } from './config.js';
 
 const $ = (id) => document.getElementById(id);
 const escapeHtml = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -28,7 +28,7 @@ const st = {
   tab: 'report', view: 'auto', repSort: { key: 'sales', dir: 'desc' }, invLimit: 300, payLimit: 300, pending: [], charts: {},
 };
 
-$('version').textContent = `الإصدار ${NEXUS_VERSION}`;
+$('version').textContent = `الإصدار ${NEXUS_VERSION} · بناء ${NEXUS_BUILD}`;
 
 // ---------------------------------------------------------------- file import
 async function readRows(file) {
@@ -177,7 +177,10 @@ function render() {
 
   const reps = repSummary(c.s, c.p);
   renderRepTable(reps, tmap, newBy);
-  if (st.tab === 'summary') renderDetail(c, reps, k, totalNew, newUnreliable);
+  if (st.tab === 'summary') {
+    const nData = reps.filter((r) => r.sales !== 0 || r.receipts !== 0 || r.invoices > 0).length;
+    renderDetail(c, reps, k, totalNew, newUnreliable, { few: reportMode(st.view, nData, st.sel.reps.size) === 'compact', nData, tmap });
+  }
   $('rangeInfo').textContent = st.sales.length ? `${int(c.s.length)} صف مبيعات، ${int(c.p.length)} سند ضمن الفلاتر` : '';
   renderPrintHead(c);
   renderPane(c);
@@ -284,7 +287,7 @@ function renderReport(c) {
   const k = computeKpis(c.s, c.p);
   const reps = repSummary(c.s, c.p);
   const nReps = reps.filter((r) => r.sales !== 0 || r.receipts !== 0 || r.invoices > 0).length;
-  const compact = reportMode(st.view, nReps) === 'compact';
+  const compact = reportMode(st.view, nReps, st.sel.reps.size) === 'compact';
   applyLayout(compact, nReps);
   const single = compact && nReps === 1;
   const { start, end } = dataRange();
@@ -382,19 +385,41 @@ function renderPrintHead(c) {
   const logo = st.system.logo ? `<img src="${escapeHtml(st.system.logo)}" alt="" height="30" style="vertical-align:middle;margin-inline-end:8px">` : '';
   $('printHead').innerHTML = `<div class="t">${logo}${escapeHtml(st.system.name)} — ${TAB_TITLE[st.tab]}</div>
     <div class="m">الفترة: من <bdi dir="ltr">${c.from || '—'}</bdi> إلى <bdi dir="ltr">${c.to || '—'}</bdi> &nbsp;|&nbsp; المناديب: ${escapeHtml(f(st.sel.reps, 'الكل'))} &nbsp;|&nbsp; المناطق: ${escapeHtml(f(st.sel.regions, 'الكل'))} &nbsp;|&nbsp; المناصب: ${escapeHtml(f(st.sel.positions, 'الكل'))}</div>
-    <div class="m">طُبع في <bdi dir="ltr">${new Date().toLocaleString('en-GB', { dateStyle: 'short', timeStyle: 'short' })}</bdi> &nbsp;|&nbsp; الإصدار ${NEXUS_VERSION}</div>`;
+    <div class="m">طُبع في <bdi dir="ltr">${new Date().toLocaleString('en-GB', { dateStyle: 'short', timeStyle: 'short' })}</bdi> &nbsp;|&nbsp; الإصدار ${NEXUS_VERSION} · بناء ${NEXUS_BUILD}</div>`;
 }
 
 // The compact one-page analysis: a slim KPI strip, the rep table with in-cell bars, and a side column
 // (trend, debt ageing, alerts). Data bars in the table replace the old tall bar chart that repeated the same numbers.
-function renderDetail(c, reps, k, totalNew, unreliable) {
+function renderDetail(c, reps, k, totalNew, unreliable, { few, nData, tmap }) {
   const item = (l, v) => `<div class="si"><div class="l">${l}</div><div class="v">${v}</div></div>`;
+  const tSales = [...tmap.values()].reduce((a, t) => a + t.sales, 0), tColl = [...tmap.values()].reduce((a, t) => a + t.collection, 0);
   $('dStrip').innerHTML = [
     item('المبيعات', money(k.sales)), item('نسبة التحصيل', `${k.paidPct.toFixed(1)}%`), item('المقبوضات', money(k.receipts)),
     item('غير المدفوع', money(k.unpaid)), item('المرتجعات', money(k.returns)), item('الفواتير', int(k.invoiceCount)),
     item('العملاء النشطون', int(k.activeCustomers)), item('عملاء جدد', unreliable ? '—' : int(totalNew)),
+    // targets live in the strip so they are still visible when the rep table is replaced by the time table
+    ...(tSales > 0 ? [item('تحقيق هدف المبيعات', `${+progressPct(k.sales, tSales).toFixed(1)}%`)] : []),
+    ...(tColl > 0 ? [item('تحقيق هدف التحصيل', `${+progressPct(k.receipts, tColl).toFixed(1)}%`)] : []),
   ].join('');
 
+  // main column adapts: many reps -> rep table; few reps -> the same measures over time + biggest customers
+  $('dRepsPanel').style.display = few && nData <= 1 ? 'none' : '';
+  $('dTimePanel').style.display = $('dCust').style.display = few ? '' : 'none';
+  if (few) {
+    const months = monthlyBreakdown(c.s, c.p).length, weekly = months < 3;
+    const rows = periodBreakdown(c.s, c.p, weekly);
+    const mx = Math.max(1, ...rows.map((r) => r.sales));
+    const tot = totalsRow(rows);
+    const label = (r) => (weekly ? `أسبوع <bdi dir="ltr">${r.key}</bdi>` : fmtMonth(r.key));
+    const ln = (r, isTot) => `<tr class="${isTot ? 'total' : ''}"><td>${isTot ? 'الإجمالي' : label(r)}</td><td class="n ${isTot ? '' : 'dbar'}" ${isTot ? '' : `style="--w:${Math.max(0, (r.sales / mx) * 100).toFixed(1)}%"`}>${money(r.sales)}</td><td class="n">${money(r.paid)}</td><td class="n">${money(r.unpaid)}</td><td class="n">${money(r.receipts)}</td>${r.sales > 0 ? `<td class="n dbar pct" style="--w:${Math.min(100, r.paidPct).toFixed(1)}%">${r.paidPct.toFixed(1)}%</td>` : '<td class="n"><span class="muted">—</span></td>'}<td class="n">${int(r.invoices)}</td><td class="n">${pctText(r.returnRate)}</td></tr>`;
+    $('dTimeTitle').textContent = weekly ? 'الأداء الأسبوعي (بداية الأسبوع الأحد)' : 'الأداء الشهري';
+    $('dTime').innerHTML = `<tr><th>${weekly ? 'الأسبوع' : 'الشهر'}</th><th class="n">المبيعات</th><th class="n">مدفوعة</th><th class="n">غير مدفوعة</th><th class="n">المقبوضات</th><th class="n">نسبة التحصيل</th><th class="n">الفواتير</th><th class="n">مرتجعات %</th></tr>${rows.map((r) => ln(r, false)).join('')}${rows.length ? ln({ ...tot, key: '' }, true) : ''}`;
+    const nTop = 8;
+    const asOf0 = c.to || today();
+    $('dDebtTitle').textContent = `أكبر ${nTop} عملاء مدينية`; $('dTopTitle').textContent = `أكبر ${nTop} عملاء مبيعاً`;
+    $('dDebt').innerHTML = `<tr><th>#</th><th>العميل</th><th class="n">الرصيد</th><th class="n">أكثر من 90 يوماً</th></tr>${agingByCustomer(c.s, asOf0).slice(0, nTop).map((x, i) => `<tr><td>${i + 1}</td><td>${escapeHtml(x.customer)}</td><td class="n"><b>${money(x.net)}</b></td><td class="n ${x.b90 ? 'low' : ''}">${money(x.b90)}</td></tr>`).join('') || '<tr><td colspan="4" class="muted">لا أرصدة مدينة</td></tr>'}`;
+    $('dTop').innerHTML = `<tr><th>#</th><th>العميل</th><th class="n">المبيعات</th><th class="n">الفواتير</th></tr>${topCustomers(c.s, nTop).map((x, i) => `<tr><td>${i + 1}</td><td>${escapeHtml(x.customer)}</td><td class="n"><b>${money(x.sales)}</b></td><td class="n">${int(x.invoices)}</td></tr>`).join('')}`;
+  }
   const asOf = c.to || today();
   const debtors = agingByCustomer(c.s, asOf);
   const sumB = (f) => debtors.reduce((a, x) => a + x[f], 0);
@@ -662,6 +687,7 @@ $('clearBtn').onclick = async () => { if (confirm('حذف الفواتير وا�
 $('printBtn').onclick = () => window.print();
 // beforeprint also fires for Ctrl+P, so both routes get the white-paper charts and an up-to-date header.
 window.addEventListener('beforeprint', () => { st.printing = true; document.body.classList.add('printing'); render(); });
+matchMedia('print').addEventListener?.('change', () => { Object.values(st.charts).forEach((ch) => { if (ch && ch.canvas) ch.resize(); }); }); // destroyed charts have no canvas
 window.addEventListener('afterprint', () => { st.printing = false; document.body.classList.remove('printing'); render(); });
 function toggleSort(th) {
   const key = th?.dataset.sort; if (!key) return;

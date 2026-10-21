@@ -130,11 +130,22 @@ body.printing .report{width:1050px;max-width:1050px;margin:0 auto}
 .dside{display:grid;gap:.8em}.dside .rbox.short{height:11em}.dside .muted{margin:.4em 0 0;font-size:.8em}
 .dtable{padding:0;overflow:hidden}.dtable .tablewrap{border:0;border-radius:0}
 .dpage .repwrap{max-height:none;overflow:visible}
+.dmain{display:grid;gap:.8em;min-width:0}
+.dt{font-size:.92em}.dt th{position:static;background:color-mix(in srgb,var(--accent) 8%,var(--card));color:var(--text);font-size:.85em}.dt td,.dt th{padding:.28em .6em}
+.dt td.n,.dt th.n{text-align:left}.dt td{white-space:normal}.dt td.n{white-space:nowrap}
+.dt tr.total td{font-weight:800;background:color-mix(in srgb,var(--accent) 8%,var(--card));border-top:2px solid var(--line)}
+.dt .dbar{background:linear-gradient(to left,color-mix(in srgb,var(--accent) 24%,transparent) var(--w),transparent var(--w))}
+.dt .dbar.pct{background:linear-gradient(to left,color-mix(in srgb,var(--warn) 26%,transparent) var(--w),transparent var(--w))}
+/* targets / progress cells must stay narrow here or the table outgrows the page */
+#reps .prog{min-width:0;width:7.5em}#reps .prog .track{min-width:2.5em}
 #reps td,#reps th{padding:.22em .6em}
+#reps td.dbar,.dt td.dbar{text-align:right}
 #reps .dbar{background:linear-gradient(to left,color-mix(in srgb,var(--accent) 24%,transparent) var(--w),transparent var(--w))}
 #reps .dbar.pct{background:linear-gradient(to left,color-mix(in srgb,var(--warn) 26%,transparent) var(--w),transparent var(--w))}
 #reps .dbar.low{background:linear-gradient(to left,color-mix(in srgb,var(--bad) 22%,transparent) var(--w),transparent var(--w))}
 @media screen and (max-width:1100px){.dgrid{grid-template-columns:1fr}}
+body.printing .dgrid{grid-template-columns:minmax(0,1fr) 235px;gap:8px}
+body.printing .dside .rbox.short{height:150px}
 /* ---------- one-page (compact) report ---------- */
 .report.compact #rp2,.report.compact #rp3{display:none}
 .report.compact .rbox.short{height:15em}
@@ -159,9 +170,10 @@ body.presenting .rbox{height:44vh}body.presenting .rbox.short{height:24vh}body.p
   .report.compact .mini{padding-block:0}
   /* detailed analysis: one landscape page */
   .dpage{--u:9.5px;font-size:9.5px}.dgrid{grid-template-columns:minmax(0,1fr) 235px;gap:8px}
-  .dstrip{grid-template-columns:repeat(8,1fr);gap:4px;margin-bottom:6px}.dstrip .si{padding:3px 6px}
+  .dstrip{grid-template-columns:repeat(auto-fit,minmax(78px,1fr));gap:4px;margin-bottom:6px}.dstrip .si{padding:3px 6px}
   #reps td,#reps th{padding:2.6px 4px;font-size:10.5px}#reps thead th{padding:3px 4px}#reps th .muted{display:none}
   .dpage{--u:10.5px;font-size:10.5px}.dstrip .v{font-size:13px}
+  .dmain{gap:7px}.dt{font-size:10px}.dt td,.dt th{padding:2.2px 4px}#reps .prog{width:62px}
   .dside{gap:7px}.dside .rbox.short{height:150px}.dside .panel{padding:6px 9px}.dside .ins{gap:4px}
   #reps .dbar,#reps .dbar.pct,#reps .dbar.low{-webkit-print-color-adjust:exact}
   .rhead{padding-bottom:5px;border-bottom:2px solid #0f766e}.rhead .rt{font-size:19px}.rhead.slim .rt{font-size:15px}
@@ -250,7 +262,14 @@ body.presenting .rbox{height:44vh}body.presenting .rbox.short{height:24vh}body.p
     <div class="dpage" id="dpage">
       <div class="dstrip" id="dStrip"></div>
       <div class="dgrid">
-        <section class="panel dtable"><div class="tablewrap repwrap"><table id="reps"></table></div></section>
+        <div class="dmain">
+          <section class="panel dtable" id="dRepsPanel"><div class="tablewrap repwrap"><table id="reps"></table></div></section>
+          <section class="panel dtable" id="dTimePanel" style="display:none"><h3 id="dTimeTitle">الأداء حسب الفترة</h3><div class="tablewrap"><table id="dTime" class="dt"></table></div></section>
+          <div class="cols2" id="dCust" style="display:none">
+            <section class="panel"><h3 id="dDebtTitle">أكبر العملاء مدينية</h3><div class="tablewrap"><table id="dDebt" class="dt"></table></div></section>
+            <section class="panel"><h3 id="dTopTitle">أكبر العملاء مبيعاً</h3><div class="tablewrap"><table id="dTop" class="dt"></table></div></section>
+          </div>
+        </div>
         <div class="dside">
           <section class="panel"><h3 id="dTrendTitle">الاتجاه</h3><div class="rbox short"><canvas id="trendChart"></canvas></div></section>
           <section class="panel"><h3>أعمار الديون</h3><div class="rbox short"><canvas id="agingChart"></canvas></div><p class="muted" id="agingMini"></p></section>

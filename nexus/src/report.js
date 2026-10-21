@@ -102,9 +102,11 @@ export function repInsights({ rep, k, pk, company, rank, repCount, newCust, mont
   return out.slice(0, 6);
 }
 
-// One page when the report is about up to three reps; the full three pages otherwise. `view` is the user's override.
-export function reportMode(view, repsWithData) {
+// One sheet whenever the report is about up to three reps: either because the user selected 1-3 reps (even if they
+// had no activity in the period) or because only that many reps have data. `view` is the user's manual override.
+export function reportMode(view, repsWithData, selectedReps = 0) {
   if (view === 'compact') return 'compact';
   if (view === 'full') return 'full';
-  return repsWithData > 0 && repsWithData <= 3 ? 'compact' : 'full';
+  if (selectedReps >= 1 && selectedReps <= 3) return 'compact';
+  return repsWithData <= 3 ? 'compact' : 'full';
 }

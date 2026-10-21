@@ -185,3 +185,17 @@ export function topCustomers(sales, n) {
   }
   return [...m.values()].filter((c) => c.sales > 0).sort((a, b) => b.sales - a.sales).slice(0, n);
 }
+
+// Rows over time (months, or weeks for short periods) with the same measures as the rep table.
+export function periodBreakdown(sales, payments, weekly, weekStartDay = WEEK_START) {
+  const keyOf = (d) => (weekly ? weekStart(d, weekStartDay) : d.slice(0, 7));
+  const by = new Map();
+  const row = (k) => { if (!by.has(k)) by.set(k, { key: k, sales: 0, gross: 0, paid: 0, unpaid: 0, receipts: 0, returns: 0, invoices: 0 }); return by.get(k); };
+  for (const s of sales) {
+    const r = row(keyOf(s.date));
+    r.sales += s.total; r.paid += s.paid; r.unpaid += s.unpaid; r.returns += s.returns;
+    if (s.total > 0) { r.invoices++; r.gross += s.total; }
+  }
+  for (const p of payments) row(keyOf(p.date)).receipts += p.amount;
+  return [...by.values()].map((r) => withRates(r)).sort((a, b) => (a.key < b.key ? -1 : 1));
+}

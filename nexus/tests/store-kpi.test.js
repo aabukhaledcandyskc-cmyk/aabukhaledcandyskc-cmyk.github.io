@@ -170,3 +170,21 @@ test('top customers by net sales; credit-note-only customers and nameless rows e
   const r = topCustomers([S('أ', 100), S('أ', 50), S('ب', 200), S('ب', -250), S('ج', 10), S('', 999)], 2);
   assert.deepEqual(r.map((x) => [x.customer, x.sales, x.invoices]), [['أ', 150, 2], ['ج', 10, 1]]);
 });
+
+import { periodBreakdown } from '../src/kpi.js';
+test('period breakdown groups by month or by week and keeps the rep-table measures', () => {
+  const s = [
+    { date: '2026-01-05', total: 100, paid: 40, unpaid: 60, returns: 0 }, { date: '2026-01-20', total: 50, paid: 50, unpaid: 0, returns: 5 },
+    { date: '2026-02-02', total: -20, paid: 0, unpaid: -20, returns: 0 },
+  ];
+  const p = [{ date: '2026-01-06', amount: 30 }, { date: '2026-03-01', amount: 7 }];
+  const m = periodBreakdown(s, p, false);
+  assert.deepEqual(m.map((r) => r.key), ['2026-01', '2026-02', '2026-03']);
+  assert.deepEqual([m[0].sales, m[0].paid, m[0].unpaid, m[0].receipts, m[0].invoices, m[0].returns], [150, 90, 60, 30, 2, 5]);
+  assert.equal(m[0].paidPct, 60);
+  assert.equal(m[1].invoices, 0); assert.equal(m[1].returnRate, null); // credit-note month
+  assert.equal(m[2].receipts, 7);
+  const w = periodBreakdown(s, p, true);
+  assert.deepEqual(w.map((r) => r.key), ['2026-01-04', '2026-01-18', '2026-02-01', '2026-03-01']); // Sunday weeks
+  assert.equal(w.reduce((a, r) => a + r.sales, 0), 130);
+});
