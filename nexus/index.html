@@ -41,8 +41,15 @@ h2{font-size:16px;margin:18px 0 8px}h3{font-size:14px;margin:14px 0 6px}
 .tabs button{background:transparent;color:var(--muted);border-radius:8px 8px 0 0;border:1px solid transparent;border-bottom:0;padding:8px 14px}
 .tabs button.on{color:var(--text);background:var(--card);border-color:var(--line);font-weight:700}
 .pane{display:none}.pane.on{display:block}
-.prog{display:flex;align-items:center;gap:8px;min-width:150px}.prog .track{flex:1;height:8px;background:var(--line);border-radius:99px;overflow:hidden}
-.prog .fill{height:100%;background:var(--accent)}.prog .fill.over{background:var(--gold)}.prog .pct{color:var(--text);font-variant-numeric:tabular-nums;min-width:48px;text-align:left;direction:ltr}
+.cell{display:grid;grid-template-columns:3.9em minmax(36px,1fr);align-items:center;gap:8px;min-width:112px}
+.val{font-weight:700;direction:ltr;text-align:right;unicode-bidi:isolate;font-variant-numeric:tabular-nums;white-space:nowrap}.val .ic{font-size:10px;margin-inline-end:3px}
+.tr{position:relative;height:7px;border-radius:99px;background:var(--line)}.tr .f{position:absolute;inset-block:0;inset-inline-start:0;border-radius:99px;min-width:0}
+.tr .tick{position:absolute;inset-block:-3px;inset-inline-end:0;width:2px;background:var(--muted);border-radius:1px}
+.tr.none{background:repeating-linear-gradient(135deg,var(--line) 0 4px,transparent 4px 8px)}
+.tr .over{position:absolute;inset-block:-1px;inset-inline-end:-10px;width:9px;height:9px;border-radius:50%;background:var(--gold);border:1px solid var(--card)}
+.s-good .f{background:var(--ok)}.s-warn .f{background:var(--warn)}.s-bad .f{background:var(--bad)}
+.s-good.val,.s-good .val{color:var(--ok)}.s-warn.val,.s-warn .val{color:var(--warn)}.s-bad.val,.s-bad .val{color:var(--bad)}
+.amt{display:block;color:var(--muted);font-size:11px;font-weight:400}td.pc{min-width:128px}
 .tbar{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-bottom:8px}.tbar input[type=search]{min-width:220px}
 .tgrid input{width:130px}
 @page{size:A4 landscape;margin:10mm 8mm 14mm;@bottom-center{content:"صفحة " counter(page) " من " counter(pages);font:9px system-ui,sans-serif;color:#555}}
@@ -73,7 +80,7 @@ h2{font-size:16px;margin:18px 0 8px}h3{font-size:14px;margin:14px 0 6px}
   .charts>:last-child{order:-1} /* short trend chart first so page 1 is not left half empty */
   #repBox{height:400px!important}.cbox{height:250px}
   #repChart,#trendChart{max-width:100%}
-  .prog .track{border:1px solid #bbb}
+  .tr{border:1px solid #bbb;-webkit-print-color-adjust:exact;print-color-adjust:exact}.tr .f,.tr .tick,.tr .over{-webkit-print-color-adjust:exact;print-color-adjust:exact}
 }
 #printHead{border-bottom:2px solid #0f766e;padding:0 0 6px;margin-bottom:8px}
 #printHead .t{font-size:16px;font-weight:700}#printHead .m{font-size:11px;color:#444;margin-top:2px}
@@ -117,7 +124,7 @@ body[data-tab=report] #kpis,body[data-tab=report] #targetCards,body[data-tab=sum
 .rtable{font-size:.95em}.rtable th{position:static;background:color-mix(in srgb,var(--accent) 8%,var(--card));color:var(--text);font-size:.85em}.rtable td,.rtable th{padding:.4em .7em}
 .rtable tr.total td{font-weight:800;background:color-mix(in srgb,var(--accent) 8%,var(--card));border-top:2px solid var(--line)}
 .rtable td.n,.rtable th.n{text-align:left}
-.rtable td{white-space:normal}.rtable td.n,.rtable th.n{white-space:nowrap}.rtable .prog{min-width:90px;max-width:150px}
+.rtable td{white-space:normal}.rtable td.n,.rtable th.n{white-space:nowrap}.rtable .cell{min-width:90px;max-width:160px}
 /* while printing the report is laid out at paper width BEFORE charts are drawn, so nothing is clipped */
 body.printing .report{width:1050px;max-width:1050px;margin:0 auto}
 .rfoot{margin-top:auto;color:var(--muted);font-size:.82em;border-top:1px solid var(--line);padding-top:.6em}
@@ -135,14 +142,11 @@ body.printing .report{width:1050px;max-width:1050px;margin:0 auto}
 .dt td.n,.dt th.n{text-align:left}.dt td{white-space:normal}.dt td.n{white-space:nowrap}
 .dt tr.total td{font-weight:800;background:color-mix(in srgb,var(--accent) 8%,var(--card));border-top:2px solid var(--line)}
 .dt .dbar{background:linear-gradient(to left,color-mix(in srgb,var(--accent) 24%,transparent) var(--w),transparent var(--w))}
-.dt .dbar.pct{background:linear-gradient(to left,color-mix(in srgb,var(--warn) 26%,transparent) var(--w),transparent var(--w))}
 /* targets / progress cells must stay narrow here or the table outgrows the page */
-#reps .prog{min-width:0;width:7.5em}#reps .prog .track{min-width:2.5em}
+#reps .cell,.dt .cell{min-width:0;width:8.6em;grid-template-columns:3.6em 1fr;gap:5px}
 #reps td,#reps th{padding:.22em .6em}
 #reps td.dbar,.dt td.dbar{text-align:right}
 #reps .dbar{background:linear-gradient(to left,color-mix(in srgb,var(--accent) 24%,transparent) var(--w),transparent var(--w))}
-#reps .dbar.pct{background:linear-gradient(to left,color-mix(in srgb,var(--warn) 26%,transparent) var(--w),transparent var(--w))}
-#reps .dbar.low{background:linear-gradient(to left,color-mix(in srgb,var(--bad) 22%,transparent) var(--w),transparent var(--w))}
 @media screen and (max-width:1100px){.dgrid{grid-template-columns:1fr}}
 body.printing .dgrid{grid-template-columns:minmax(0,1fr) 235px;gap:8px}
 body.printing .dside .rbox.short{height:150px}
@@ -173,9 +177,9 @@ body.presenting .rbox{height:44vh}body.presenting .rbox.short{height:24vh}body.p
   .dstrip{grid-template-columns:repeat(auto-fit,minmax(78px,1fr));gap:4px;margin-bottom:6px}.dstrip .si{padding:3px 6px}
   #reps td,#reps th{padding:2.6px 4px;font-size:10.5px}#reps thead th{padding:3px 4px}#reps th .muted{display:none}
   .dpage{--u:10.5px;font-size:10.5px}.dstrip .v{font-size:13px}
-  .dmain{gap:7px}.dt{font-size:10px}.dt td,.dt th{padding:2.2px 4px}#reps .prog{width:62px}
+  .dmain{gap:7px}.dt{font-size:10px}.dt td,.dt th{padding:2.2px 4px}#reps .cell,.dt .cell{width:78px;grid-template-columns:3.3em 1fr;gap:3px}.dt .val{font-size:10px}
   .dside{gap:7px}.dside .rbox.short{height:150px}.dside .panel{padding:6px 9px}.dside .ins{gap:4px}
-  #reps .dbar,#reps .dbar.pct,#reps .dbar.low{-webkit-print-color-adjust:exact}
+  #reps .dbar{-webkit-print-color-adjust:exact}
   .rhead{padding-bottom:5px;border-bottom:2px solid #0f766e}.rhead .rt{font-size:19px}.rhead.slim .rt{font-size:15px}
   .tile{background:#fff;padding:6px 9px;break-inside:avoid}.tile .v{font-size:19px}
   .mini .v{font-size:14px}
@@ -340,6 +344,8 @@ body.presenting .rbox{height:44vh}body.presenting .rbox.short{height:24vh}body.p
   <h2 style="margin-top:0">الإعدادات</h2>
   <h3>اسم النظام</h3>
   <div class="bar"><input type="text" id="sName" placeholder="اسم النظام" style="min-width:220px"><input type="text" id="sLogo" placeholder="رابط الشعار (اختياري)" style="min-width:260px"></div>
+  <h3>حدود ألوان نسبة التحصيل</h3>
+  <div class="bar"><label>أحمر (▼) أقل من <input type="number" id="sWarn" min="0" max="200" step="1" style="width:5em">%</label><label>أصفر (◆) حتى <input type="number" id="sGood" min="1" max="200" step="1" style="width:5em">%، وما فوقه أخضر (✓)</label></div>
   <h3>المنطقة والمنصب لكل مندوب</h3>
   <div class="tablewrap" style="max-height:40vh;overflow:auto"><table id="sTable"></table></div>
   <datalist id="regionOpts"></datalist><datalist id="posOpts"></datalist>

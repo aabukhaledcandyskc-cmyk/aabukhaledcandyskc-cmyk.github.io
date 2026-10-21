@@ -12,6 +12,7 @@ import { buildChecks, compactLedger, compareWithDaftra } from './verify.js';
 import { rowsFromWorkbook, workbookFromRows } from './excel.js';
 import { previousPeriod, deltaPct, presetRange, topWithOthers, insights, repInsights, reportMode } from './report.js';
 import { NEXUS_VERSION, NEXUS_BUILD } from './config.js';
+import { DEFAULT_THRESHOLDS, STATUS_ICON, pctStatus, normalizeThresholds, fmtPct, barWidth, overflows } from './pct.js';
 
 const $ = (id) => document.getElementById(id);
 const escapeHtml = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -23,7 +24,7 @@ const FLAG_LABEL = { overpaid: 'دفعة زائدة', discrepancy: 'تناقض',
 const SYSTEM_KEY = '__system';
 
 const st = {
-  sales: [], payments: [], meta: new Map(), targets: [], system: { name: 'NEXUS Dashboard', logo: '' },
+  sales: [], payments: [], meta: new Map(), targets: [], system: { name: 'NEXUS Dashboard', logo: '' }, thresholds: { ...DEFAULT_THRESHOLDS },
   sel: { reps: new Set(), regions: new Set(), positions: new Set(), statuses: new Set() }, ledger: null, theme: null, first: new Map(), badge: null,
   tab: 'report', view: 'auto', repSort: { key: 'sales', dir: 'desc' }, invLimit: 300, payLimit: 300, pending: [], charts: {},
 };
@@ -144,8 +145,17 @@ const dataRange = () => {
 };
 
 // ---------------------------------------------------------------- rendering
-const progress = (pct) => (pct === null ? '<span class="muted">—</span>'
-  : `<div class="prog"><div class="track"><div class="fill ${pct > 100 ? 'over' : ''}" style="width:${Math.min(100, pct)}%"></div></div><span class="pct">${+pct.toFixed(1)}%</span></div>`);
+// Status-aware percentage cell: number (with icon, so colour is never the only signal) + track with a tick at 100%.
+const progress = (pct, hasBase = true, tip = '') => {
+  const stt = pctStatus(pct, hasBase, st.thresholds);
+  if (stt === 'none') return '<div class="cell"><span class="val muted">—</span><div class="tr none" title="لا مبيعات للنسبة"></div></div>';
+  return `<div class="cell s-${stt}"${tip ? ` title="${escapeHtml(tip)}"` : ''}><span class="val"><span class="ic" aria-hidden="true">${STATUS_ICON[stt]}</span>${fmtPct(pct)}</span><div class="tr"><div class="f" style="width:${barWidth(pct).toFixed(1)}%"></div><i class="tick"></i>${overflows(pct) ? '<i class="over" title="تجاوز 100%"></i>' : ''}</div></div>`;
+};
+// Total rows are a summary, not a peer: number only, with the status colour/icon.
+const pctTotal = (pct, hasBase = true) => {
+  const stt = pctStatus(pct, hasBase, st.thresholds);
+  return stt === 'none' ? '<span class="muted">—</span>' : `<span class="val s-${stt}"><span class="ic" aria-hidden="true">${STATUS_ICON[stt]}</span>${fmtPct(pct)}</span>`;
+};
 
 function render() {
   document.body.dataset.tab = st.tab; // lets the print stylesheet know which tab is on paper
@@ -205,7 +215,7 @@ function renderRepTable(reps, tmap, newBy) {
   const w = (v) => `style="--w:${Math.max(0, Math.min(100, v)).toFixed(1)}%"`;
   const line = (r, isTotal) => `<tr class="${isTotal ? 'total' : ''}"><td>${isTotal ? '<b>الإجمالي</b>' : `<button class="link" data-rep="${escapeHtml(r.rep)}" aria-label="بطاقة ${escapeHtml(r.rep)}">${escapeHtml(r.rep)}</button>`}</td>
     <td class="n ${isTotal ? '' : 'dbar'}" ${isTotal ? '' : w((r.sales / maxSales) * 100)}>${money(r.sales)}</td><td class="n">${money(r.paid)}</td><td class="n">${money(r.unpaid)}</td><td class="n">${money(r.receipts)}</td>
-    ${r.sales > 0 ? `<td class="n dbar pct ${!isTotal && r.paidPct < 50 ? 'low' : ''}" ${w(r.paidPct)}>${r.paidPct.toFixed(1)}%</td>` : '<td class="n"><span class="muted">—</span></td>'}<td class="n">${int(r.invoices)}</td><td class="n">${int(r.newCust)}</td><td class="n">${pctText(r.returnRate)}</td>
+    <td class="pc">${isTotal ? pctTotal(r.paidPct, r.sales > 0) : progress(r.paidPct, r.sales > 0, `مدفوع ${money(r.paid)} من ${money(r.sales)}`)}</td><td class="n">${int(r.invoices)}</td><td class="n">${int(r.newCust)}</td><td class="n">${pctText(r.returnRate)}</td>
     ${hasMeta ? `<td>${isTotal ? '' : escapeHtml(r.region ?? '')}</td><td>${isTotal ? '' : escapeHtml(r.position ?? '')}</td>` : ''}
     ${hasTargets ? `<td>${isTotal ? '' : progress(r.tSales)}</td><td>${isTotal ? '' : progress(r.tColl)}</td>` : ''}</tr>`;
   const arrow = (k) => (st.repSort.key === k ? (st.repSort.dir === 'asc' ? ' ▲' : ' ▼') : '');
@@ -342,7 +352,8 @@ function renderReport(c) {
   // table: top 14 + folded rest + total
   const rows = topWithOthers(reps, compact ? (nReps <= 3 ? 3 : 6) : 14);
   const share = (r) => (total.sales > 0 ? `${((r.sales / total.sales) * 100).toFixed(1)}%` : '—');
-  const line = (r, tot) => `<tr class="${tot ? 'total' : ''}"><td>${escapeHtml(r.rep)}</td><td class="n">${money(r.sales)}</td><td class="n">${money(r.paid)}</td><td>${progress(r.sales > 0 ? (r.paid / r.sales) * 100 : null)}</td><td class="n">${money(r.unpaid)}</td><td class="n">${money(r.receipts)}</td><td class="n">${int(r.invoices)}</td><td class="n">${tot ? '100%' : share(r)}</td></tr>`;
+  const showAmt = !compact && rows.length <= 12;
+  const line = (r, tot) => { const pr = r.sales > 0 ? (r.paid / r.sales) * 100 : null; return `<tr class="${tot ? 'total' : ''}"><td>${escapeHtml(r.rep)}${showAmt && !tot && r.sales > 0 ? `<span class="amt">محصّل ${money(r.paid)} من ${money(r.sales)}</span>` : ''}</td><td class="n">${money(r.sales)}</td><td class="n">${money(r.paid)}</td><td class="pc">${tot ? pctTotal(pr, r.sales > 0) : progress(pr, r.sales > 0)}</td><td class="n">${money(r.unpaid)}</td><td class="n">${money(r.receipts)}</td><td class="n">${int(r.invoices)}</td><td class="n">${tot ? '100%' : share(r)}</td></tr>`; };
   $('rTable').innerHTML = `<tr><th>المندوب</th><th class="n">المبيعات</th><th class="n">المحصَّل من الفواتير</th><th>نسبة التحصيل</th><th class="n">غير المدفوع</th><th class="n">المقبوضات</th><th class="n">الفواتير</th><th class="n">حصته</th></tr>${rows.map((r) => line(r, false)).join('')}${line({ ...total, rep: 'الإجمالي' }, true)}`;
 
   $('rDebt').innerHTML = `<tr><th>#</th><th>العميل</th><th class="n">الرصيد</th><th class="n">أكثر من 90 يوماً</th></tr>${debtors.slice(0, nList).map((x, i) => `<tr><td>${i + 1}</td><td>${escapeHtml(x.customer)}</td><td class="n"><b>${money(x.net)}</b></td><td class="n ${x.b90 ? 'low' : ''}">${money(x.b90)}</td></tr>`).join('') || '<tr><td colspan="4" class="muted">لا أرصدة مدينة</td></tr>'}`;
@@ -394,7 +405,7 @@ function renderDetail(c, reps, k, totalNew, unreliable, { few, nData, tmap }) {
   const item = (l, v) => `<div class="si"><div class="l">${l}</div><div class="v">${v}</div></div>`;
   const tSales = [...tmap.values()].reduce((a, t) => a + t.sales, 0), tColl = [...tmap.values()].reduce((a, t) => a + t.collection, 0);
   $('dStrip').innerHTML = [
-    item('المبيعات', money(k.sales)), item('نسبة التحصيل', `${k.paidPct.toFixed(1)}%`), item('المقبوضات', money(k.receipts)),
+    item('المبيعات', money(k.sales)), item('نسبة التحصيل', pctTotal(k.paidPct, k.sales > 0)), item('المقبوضات', money(k.receipts)),
     item('غير المدفوع', money(k.unpaid)), item('المرتجعات', money(k.returns)), item('الفواتير', int(k.invoiceCount)),
     item('العملاء النشطون', int(k.activeCustomers)), item('عملاء جدد', unreliable ? '—' : int(totalNew)),
     // targets live in the strip so they are still visible when the rep table is replaced by the time table
@@ -411,7 +422,7 @@ function renderDetail(c, reps, k, totalNew, unreliable, { few, nData, tmap }) {
     const mx = Math.max(1, ...rows.map((r) => r.sales));
     const tot = totalsRow(rows);
     const label = (r) => (weekly ? `أسبوع <bdi dir="ltr">${r.key}</bdi>` : fmtMonth(r.key));
-    const ln = (r, isTot) => `<tr class="${isTot ? 'total' : ''}"><td>${isTot ? 'الإجمالي' : label(r)}</td><td class="n ${isTot ? '' : 'dbar'}" ${isTot ? '' : `style="--w:${Math.max(0, (r.sales / mx) * 100).toFixed(1)}%"`}>${money(r.sales)}</td><td class="n">${money(r.paid)}</td><td class="n">${money(r.unpaid)}</td><td class="n">${money(r.receipts)}</td>${r.sales > 0 ? `<td class="n dbar pct" style="--w:${Math.min(100, r.paidPct).toFixed(1)}%">${r.paidPct.toFixed(1)}%</td>` : '<td class="n"><span class="muted">—</span></td>'}<td class="n">${int(r.invoices)}</td><td class="n">${pctText(r.returnRate)}</td></tr>`;
+    const ln = (r, isTot) => `<tr class="${isTot ? 'total' : ''}"><td>${isTot ? 'الإجمالي' : label(r)}</td><td class="n ${isTot ? '' : 'dbar'}" ${isTot ? '' : `style="--w:${Math.max(0, (r.sales / mx) * 100).toFixed(1)}%"`}>${money(r.sales)}</td><td class="n">${money(r.paid)}</td><td class="n">${money(r.unpaid)}</td><td class="n">${money(r.receipts)}</td><td class="pc">${isTot ? pctTotal(r.paidPct, r.sales > 0) : progress(r.paidPct, r.sales > 0, `مدفوع ${money(r.paid)} من ${money(r.sales)}`)}</td><td class="n">${int(r.invoices)}</td><td class="n">${pctText(r.returnRate)}</td></tr>`;
     $('dTimeTitle').textContent = weekly ? 'الأداء الأسبوعي (بداية الأسبوع الأحد)' : 'الأداء الشهري';
     $('dTime').innerHTML = `<tr><th>${weekly ? 'الأسبوع' : 'الشهر'}</th><th class="n">المبيعات</th><th class="n">مدفوعة</th><th class="n">غير مدفوعة</th><th class="n">المقبوضات</th><th class="n">نسبة التحصيل</th><th class="n">الفواتير</th><th class="n">مرتجعات %</th></tr>${rows.map((r) => ln(r, false)).join('')}${rows.length ? ln({ ...tot, key: '' }, true) : ''}`;
     const nTop = 8;
@@ -567,7 +578,7 @@ function settingsRows() {
     const m = st.meta.get(r) ?? {};
     return `<tr><td>${escapeHtml(r)}</td><td><input type="text" list="regionOpts" data-rep="${escapeHtml(r)}" data-f="region" value="${escapeHtml(m.region ?? '')}"></td><td><input type="text" list="posOpts" data-rep="${escapeHtml(r)}" data-f="position" value="${escapeHtml(m.position ?? '')}"></td></tr>`;
   }).join('');
-  $('sName').value = st.system.name; $('sLogo').value = st.system.logo;
+  $('sName').value = st.system.name; $('sLogo').value = st.system.logo; $('sWarn').value = st.thresholds.warn; $('sGood').value = st.thresholds.good;
 }
 async function saveSettings() {
   const by = new Map();
@@ -576,7 +587,7 @@ async function saveSettings() {
     o[inp.dataset.f] = inp.value.trim(); by.set(inp.dataset.rep, o);
   }
   for (const o of by.values()) await browserStore.put('repSettings', o);
-  await browserStore.put('repSettings', { key: SYSTEM_KEY, name: $('sName').value.trim() || 'NEXUS Dashboard', logo: $('sLogo').value.trim() });
+  await browserStore.put('repSettings', { key: SYSTEM_KEY, name: $('sName').value.trim() || 'NEXUS Dashboard', logo: $('sLogo').value.trim(), ...normalizeThresholds(Number($('sWarn').value), Number($('sGood').value)) });
   await loadMeta(); applySystem(); renderMsels(); render();
   $('sMsg').textContent = 'تم حفظ الإعدادات';
 }
@@ -590,6 +601,7 @@ async function loadMeta() {
   st.meta = new Map(rows.filter((r) => r.key !== SYSTEM_KEY).map((r) => [r.rep, { region: r.region ?? '', position: r.position ?? '' }]));
   const sys = rows.find((r) => r.key === SYSTEM_KEY);
   if (sys) st.system = { name: sys.name, logo: sys.logo };
+  st.thresholds = normalizeThresholds(sys?.warn, sys?.good);
 }
 
 // ---- backup / restore
