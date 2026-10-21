@@ -121,12 +121,17 @@ body[data-tab=report] #kpis,body[data-tab=report] #targetCards{display:none}
 /* while printing the report is laid out at paper width BEFORE charts are drawn, so nothing is clipped */
 body.printing .report{width:1050px;max-width:1050px;margin:0 auto}
 .rfoot{margin-top:auto;color:var(--muted);font-size:.82em;border-top:1px solid var(--line);padding-top:.6em}
+/* ---------- one-page (compact) report ---------- */
+.report.compact #rp2,.report.compact #rp3{display:none}
+.report.compact .rbox.short{height:15em}
+.report.compact .rtable{font-size:.9em}
+.report.compact .rtable td,.report.compact .rtable th{padding:.3em .6em}
 /* ---------- presentation mode ---------- */
 body.presenting>header,body.presenting .bar,body.presenting .tabs,body.presenting .notice,body.presenting #printHead{display:none!important}
 body.presenting main{max-width:none;padding:0}
 html.presenting{scroll-snap-type:y mandatory}
 body.presenting .report{--u:clamp(15px,1.12vw,26px);max-width:none;gap:0}
-body.presenting .page{min-height:100vh;border-radius:0;border:0;scroll-snap-align:start;padding:2.2vh 3vw}
+body.presenting .report.compact{--u:clamp(13px,.84vw,19px)}body.presenting .report.compact .page{padding:1.6vh 2.4vw;gap:1.5vh;justify-content:flex-start}body.presenting .report.compact .tile .v{font-size:1.6em}body.presenting .report.compact .rbox.short{height:20vh}body.presenting .report.compact .rtable{font-size:.85em}body.presenting .report.compact .rtable td,body.presenting .report.compact .rtable th{padding:.25em .6em}body.presenting .page{min-height:100vh;border-radius:0;border:0;scroll-snap-align:start;padding:2.2vh 3vw}
 body.presenting .rbox{height:44vh}body.presenting .rbox.short{height:24vh}body.presenting .rtable{font-size:.78em}body.presenting .rtable td,body.presenting .rtable th{padding:.28em .6em}
 @media screen and (max-width:1000px){.hero{grid-template-columns:repeat(2,1fr)}.cols,.cols2{grid-template-columns:1fr}}
 /* ---------- report on paper: three A4-landscape pages ---------- */
@@ -134,7 +139,10 @@ body.presenting .rbox{height:44vh}body.presenting .rbox.short{height:24vh}body.p
   body[data-tab=report] #printHead{display:none!important}
   .report{--u:10.5px;gap:0;max-width:none;font-size:10.5px}
   .page{border:0;border-radius:0;padding:0;gap:8px;break-after:page;page-break-after:always;min-height:0}
-  .page:last-child{break-after:auto;page-break-after:auto}
+  .page:last-child,.report.compact #rp1{break-after:auto;page-break-after:auto}
+  .report.compact .rbox.short{height:185px}.report.compact .rtable{font-size:10px}.report.compact .rtable td,.report.compact .rtable th{padding:2px 6px}
+  .report.compact .tile{padding:4px 8px}.report.compact .tile .v{font-size:16px}.report.compact .page{gap:6px}
+  .report.compact .mini{padding-block:0}
   .rhead{padding-bottom:5px;border-bottom:2px solid #0f766e}.rhead .rt{font-size:19px}.rhead.slim .rt{font-size:15px}
   .tile{background:#fff;padding:6px 9px;break-inside:avoid}.tile .v{font-size:19px}
   .mini .v{font-size:14px}
@@ -168,6 +176,7 @@ body.presenting .rbox{height:44vh}body.presenting .rbox.short{height:24vh}body.p
     <span class="chips" id="presets">
       <button class="ghost" data-preset="all">كل الفترة</button><button class="ghost" data-preset="month">الشهر الأخير</button><button class="ghost" data-preset="prevMonth">الشهر السابق</button><button class="ghost" data-preset="last3">آخر 3 أشهر</button><button class="ghost" data-preset="last12">آخر 12 شهراً</button><button class="ghost" data-preset="ytd">هذه السنة</button>
     </span>
+    <span class="chips" id="viewMode" title="شكل التقرير: تلقائي يجعله صفحة واحدة عند ≤3 مناديب"><button class="ghost" data-view="auto">تلقائي</button><button class="ghost" data-view="compact">صفحة واحدة</button><button class="ghost" data-view="full">كامل</button></span>
     <details class="msel" id="repSel"><summary id="repSelLabel">كل المناديب</summary><div class="mpanel" id="repList"></div></details>
     <details class="msel" id="regionSel"><summary id="regionSelLabel">كل المناطق</summary><div class="mpanel" id="regionList"></div></details>
     <details class="msel" id="statusSel" style="display:none"><summary id="statusSelLabel">كل الحالات</summary><div class="mpanel" id="statusList"></div></details>
@@ -192,23 +201,26 @@ body.presenting .rbox{height:44vh}body.presenting .rbox.short{height:24vh}body.p
         <header class="rhead"><div><div class="rt" id="rTitle">تقرير أداء المبيعات والتحصيل</div><div class="rs" id="rSub"></div></div><div class="rmeta" id="rMeta"></div></header>
         <div class="hero" id="rHero"></div>
         <div class="minis" id="rMinis"></div>
-        <div class="cols">
-          <section class="panel"><h3>أبرز النقاط</h3><ul class="ins" id="rInsights"></ul></section>
-          <section class="panel"><h3>المبيعات والتحصيل حسب المندوب</h3><div class="rbox" id="rRepBox"><canvas id="rRepChart"></canvas></div></section>
+        <div class="cols" id="colsA">
+          <section class="panel" id="pInsights"><h3>أبرز النقاط</h3><ul class="ins" id="rInsights"></ul></section>
+          <section class="panel" id="pRepChart"><h3>المبيعات والتحصيل حسب المندوب</h3><div class="rbox" id="rRepBox"><canvas id="rRepChart"></canvas></div></section>
         </div>
+        <div id="slotTable1"></div>
+        <div class="cols2" id="colsB"></div>
+        <div id="footSlot1"></div>
       </article>
       <article class="page" id="rp2">
         <header class="rhead slim"><div class="rt">أداء المناديب</div><div class="rs" id="rSub2"></div></header>
-        <section class="panel"><h3 id="rTrendTitle">الاتجاه الشهري: المبيعات والمقبوضات</h3><div class="rbox short"><canvas id="rMonthChart"></canvas></div></section>
-        <section class="panel flush"><div class="tablewrap"><table id="rTable" class="rtable"></table></div></section>
+        <div id="slotTrend"><section class="panel" id="pTrend"><h3 id="rTrendTitle">الاتجاه الشهري: المبيعات والمقبوضات</h3><div class="rbox short"><canvas id="rMonthChart"></canvas></div></section></div>
+        <div id="slotTable"><section class="panel flush" id="pTable"><div class="tablewrap"><table id="rTable" class="rtable"></table></div></section></div>
       </article>
       <article class="page" id="rp3">
         <header class="rhead slim"><div class="rt">العملاء</div><div class="rs" id="rSub3"></div></header>
-        <div class="cols2">
-          <section class="panel"><h3>أكبر 10 عملاء مدينية</h3><div class="tablewrap"><table id="rDebt" class="rtable"></table></div><p class="muted" id="rDebtNote"></p></section>
-          <section class="panel"><h3>أكبر 10 عملاء مبيعاً</h3><div class="tablewrap"><table id="rTop" class="rtable"></table></div></section>
+        <div class="cols2" id="colsC">
+          <section class="panel" id="pDebt"><h3 id="rDebtTitle">أكبر 10 عملاء مدينية</h3><div class="tablewrap"><table id="rDebt" class="rtable"></table></div><p class="muted" id="rDebtNote"></p></section>
+          <section class="panel" id="pTop"><h3 id="rTopTitle">أكبر 10 عملاء مبيعاً</h3><div class="tablewrap"><table id="rTop" class="rtable"></table></div></section>
         </div>
-        <footer class="rfoot" id="rFoot"></footer>
+        <div id="footSlot3"><footer class="rfoot" id="rFoot"></footer></div>
       </article>
     </div>
   </section>

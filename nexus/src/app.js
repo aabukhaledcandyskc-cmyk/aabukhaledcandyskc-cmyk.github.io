@@ -10,7 +10,7 @@ import { toCents, fromCents } from './shared.js';
 import { parseLedger } from './ledger.js';
 import { buildChecks, compactLedger, compareWithDaftra } from './verify.js';
 import { rowsFromWorkbook, workbookFromRows } from './excel.js';
-import { previousPeriod, deltaPct, presetRange, topWithOthers, insights } from './report.js';
+import { previousPeriod, deltaPct, presetRange, topWithOthers, insights, repInsights, reportMode } from './report.js';
 import { NEXUS_VERSION } from './config.js';
 
 const $ = (id) => document.getElementById(id);
@@ -25,7 +25,7 @@ const SYSTEM_KEY = '__system';
 const st = {
   sales: [], payments: [], meta: new Map(), targets: [], system: { name: 'NEXUS Dashboard', logo: '' },
   sel: { reps: new Set(), regions: new Set(), positions: new Set(), statuses: new Set() }, ledger: null, theme: null, first: new Map(), badge: null,
-  tab: 'report', repSort: { key: 'sales', dir: 'desc' }, invLimit: 300, payLimit: 300, pending: [], charts: {},
+  tab: 'report', view: 'auto', repSort: { key: 'sales', dir: 'desc' }, invLimit: 300, payLimit: 300, pending: [], charts: {},
 };
 
 $('version').textContent = `الإصدار ${NEXUS_VERSION}`;
@@ -150,6 +150,7 @@ const progress = (pct) => (pct === null ? '<span class="muted">—</span>'
 function render() {
   document.body.dataset.tab = st.tab; // lets the print stylesheet know which tab is on paper
   markPreset();
+  document.querySelectorAll('#viewMode [data-view]').forEach((b) => b.classList.toggle('on', b.dataset.view === st.view));
   const c = current();
   const k = computeKpis(c.s, c.p);
   const newBy = newCustomersByRep(st.first, { from: c.from, to: c.to }, c.allowed);
@@ -253,14 +254,39 @@ function chip(cur, prev, goodWhenUp = true, points = false) {
   return `<span class="dchip ${good ? 'good' : 'bad'}">${d > 0 ? '▲' : '▼'} ${Math.abs(d).toFixed(1)}${points ? ' نقطة' : '%'}</span>`;
 }
 
+// The report's panels are moved between pages: three pages for the company view, one dense page for a few reps.
+const PANEL_IDS = ['pInsights', 'pRepChart', 'pTrend', 'pTable', 'pDebt', 'pTop', 'rFoot'];
+const PANEL = Object.fromEntries(PANEL_IDS.map((id) => [id, document.getElementById(id)]));
+const put = (id, ...els) => document.getElementById(id).replaceChildren(...els);
+function applyLayout(compact, nReps) {
+  $('report').classList.toggle('compact', compact);
+  if (compact) {
+    put('colsA', PANEL.pInsights, PANEL.pTrend);
+    put('slotTrend', PANEL.pRepChart);                       // parked on the hidden page
+    if (nReps > 1) { put('slotTable1', PANEL.pTable); put('slotTable'); } else { put('slotTable1'); put('slotTable', PANEL.pTable); }
+    put('colsB', PANEL.pDebt, PANEL.pTop); put('colsC');
+    put('footSlot1', PANEL.rFoot); put('footSlot3');
+  } else {
+    put('colsA', PANEL.pInsights, PANEL.pRepChart);
+    put('slotTrend', PANEL.pTrend); put('slotTable', PANEL.pTable); put('slotTable1');
+    put('colsB'); put('colsC', PANEL.pDebt, PANEL.pTop);
+    put('footSlot1'); put('footSlot3', PANEL.rFoot);
+  }
+}
+
 function renderReport(c) {
   const k = computeKpis(c.s, c.p);
+  const reps = repSummary(c.s, c.p);
+  const nReps = reps.filter((r) => r.sales !== 0 || r.receipts !== 0 || r.invoices > 0).length;
+  const compact = reportMode(st.view, nReps) === 'compact';
+  applyLayout(compact, nReps);
+  const single = compact && nReps === 1;
   const { start, end } = dataRange();
   const prev = previousPeriod(c.from, c.to, start);
   const pk = prev ? computeKpis(...Object.values(sliceRows(prev.from, prev.to, c.allowed))) : null;
   const f = (set) => (set.size ? [...set].map((x) => x || 'غير محدد').join('، ') : 'الكل');
   const sub = `الفترة: من <bdi dir="ltr">${c.from || '—'}</bdi> إلى <bdi dir="ltr">${c.to || '—'}</bdi> · المناديب: ${escapeHtml(f(st.sel.reps))} · المناطق: ${escapeHtml(f(st.sel.regions))} · المناصب: ${escapeHtml(f(st.sel.positions))}`;
-  $('rTitle').textContent = `${st.system.name} — تقرير أداء المبيعات والتحصيل`;
+  $('rTitle').textContent = single ? `${st.system.name} — تقرير المندوب: ${reps.find((r) => r.sales !== 0 || r.receipts !== 0 || r.invoices > 0).rep}` : `${st.system.name} — تقرير أداء المبيعات والتحصيل`;
   for (const id of ['rSub', 'rSub2', 'rSub3']) $(id).innerHTML = sub;
   const stamp = new Date().toLocaleString('en-GB', { dateStyle: 'short', timeStyle: 'short' });
   const b = st.badge;
@@ -289,28 +315,36 @@ function renderReport(c) {
     ...(tSales > 0 ? [mini('تحقيق هدف المبيعات', `${+progressPct(k.sales, tSales).toFixed(1)}%`, `من ${money(tSales)}`)] : []),
   ].join('');
 
-  const reps = repSummary(c.s, c.p);
   const total = totalsRow(reps);
   const monthly = monthlyBreakdown(c.s, c.p);
   const debtors = agingByCustomer(c.s, c.to || today());
-  $('rInsights').innerHTML = insights({ reps, totals: k, prevTotals: pk, monthly, debtors, overpaid: k.overpaid }, { money, pct: (p) => `${p.toFixed(1)}%`, month: fmtMonth })
+  const fmtI = { money, pct: (p) => `${p.toFixed(1)}%`, month: fmtMonth };
+  let list;
+  if (single) {
+    const co = sliceRows(c.from, c.to, null), coK = computeKpis(co.s, co.p), coReps = repSummary(co.s, co.p).filter((r) => r.sales > 0);
+    const me = reps.find((r) => r.sales !== 0 || r.receipts !== 0 || r.invoices > 0).rep;
+    list = repInsights({ rep: me, k, pk, company: { sales: coK.sales, paidPct: coK.paidPct }, rank: Math.max(1, coReps.findIndex((r) => r.rep === me) + 1), repCount: coReps.length, newCust: totalNew, monthly, debtors, overpaid: k.overpaid }, fmtI);
+  } else list = insights({ reps, totals: k, prevTotals: pk, monthly, debtors, overpaid: k.overpaid }, fmtI);
+  $('rInsights').innerHTML = list
     .map((i) => `<li class="${i.kind}">${escapeHtml(i.text)}</li>`).join('') || '<li class="muted">لا توجد بيانات كافية.</li>';
+  const nList = compact ? 7 : 10;
+  $('rDebtTitle').textContent = `أكبر ${nList} عملاء مدينية`; $('rTopTitle').textContent = `أكبر ${nList} عملاء مبيعاً`;
 
   // table: top 14 + folded rest + total
-  const rows = topWithOthers(reps, 14);
+  const rows = topWithOthers(reps, compact ? (nReps <= 3 ? 3 : 6) : 14);
   const share = (r) => (total.sales > 0 ? `${((r.sales / total.sales) * 100).toFixed(1)}%` : '—');
   const line = (r, tot) => `<tr class="${tot ? 'total' : ''}"><td>${escapeHtml(r.rep)}</td><td class="n">${money(r.sales)}</td><td class="n">${money(r.paid)}</td><td>${progress(r.sales > 0 ? (r.paid / r.sales) * 100 : null)}</td><td class="n">${money(r.unpaid)}</td><td class="n">${money(r.receipts)}</td><td class="n">${int(r.invoices)}</td><td class="n">${tot ? '100%' : share(r)}</td></tr>`;
   $('rTable').innerHTML = `<tr><th>المندوب</th><th class="n">المبيعات</th><th class="n">المحصَّل من الفواتير</th><th>نسبة التحصيل</th><th class="n">غير المدفوع</th><th class="n">المقبوضات</th><th class="n">الفواتير</th><th class="n">حصته</th></tr>${rows.map((r) => line(r, false)).join('')}${line({ ...total, rep: 'الإجمالي' }, true)}`;
 
-  $('rDebt').innerHTML = `<tr><th>#</th><th>العميل</th><th class="n">الرصيد</th><th class="n">أكثر من 90 يوماً</th></tr>${debtors.slice(0, 10).map((x, i) => `<tr><td>${i + 1}</td><td>${escapeHtml(x.customer)}</td><td class="n"><b>${money(x.net)}</b></td><td class="n ${x.b90 ? 'low' : ''}">${money(x.b90)}</td></tr>`).join('') || '<tr><td colspan="4" class="muted">لا أرصدة مدينة</td></tr>'}`;
+  $('rDebt').innerHTML = `<tr><th>#</th><th>العميل</th><th class="n">الرصيد</th><th class="n">أكثر من 90 يوماً</th></tr>${debtors.slice(0, nList).map((x, i) => `<tr><td>${i + 1}</td><td>${escapeHtml(x.customer)}</td><td class="n"><b>${money(x.net)}</b></td><td class="n ${x.b90 ? 'low' : ''}">${money(x.b90)}</td></tr>`).join('') || '<tr><td colspan="4" class="muted">لا أرصدة مدينة</td></tr>'}`;
   $('rDebtNote').textContent = `الأعمار حتى ${c.to || today()}. عدد العملاء المدينين: ${int(debtors.length)}.`;
-  $('rTop').innerHTML = `<tr><th>#</th><th>العميل</th><th class="n">المبيعات</th><th class="n">الفواتير</th></tr>${topCustomers(c.s, 10).map((x, i) => `<tr><td>${i + 1}</td><td>${escapeHtml(x.customer)}</td><td class="n"><b>${money(x.sales)}</b></td><td class="n">${int(x.invoices)}</td></tr>`).join('')}`;
+  $('rTop').innerHTML = `<tr><th>#</th><th>العميل</th><th class="n">المبيعات</th><th class="n">الفواتير</th></tr>${topCustomers(c.s, nList).map((x, i) => `<tr><td>${i + 1}</td><td>${escapeHtml(x.customer)}</td><td class="n"><b>${money(x.sales)}</b></td><td class="n">${int(x.invoices)}</td></tr>`).join('')}`;
   $('rFoot').innerHTML = `المصدر: تقارير دفترة المستوردة (${int(st.sales.length)} صف مبيعات، ${int(st.payments.length)} سند). التحصيل = المدفوع ÷ المبيعات، والمقبوضات تشمل سندات فواتير فترات سابقة. ${prev ? `المقارنة مع الفترة السابقة <bdi dir="ltr">${prev.from}</bdi> إلى <bdi dir="ltr">${prev.to}</bdi>.` : 'لا مقارنة: لا توجد بيانات للفترة السابقة.'}`;
 
-  renderReportCharts(reps, monthly, weeklyTrend(c.s, c.p));
+  renderReportCharts(reps, monthly, weeklyTrend(c.s, c.p), compact);
 }
 
-function renderReportCharts(reps, monthly, trend) {
+function renderReportCharts(reps, monthly, trend, onePage) {
   if (!window.Chart) return;
   const css = getComputedStyle(document.documentElement);
   const pick = (v, fallback) => (st.printing ? fallback : css.getPropertyValue(v).trim());
@@ -321,7 +355,7 @@ function renderReportCharts(reps, monthly, trend) {
   const base = { responsive: true, maintainAspectRatio: false, animation: st.printing ? false : undefined, plugins: { legend: { labels: { color: text, font: { size }, boxWidth: 14 } } } };
   st.charts.rRep?.destroy(); st.charts.rMonth?.destroy();
   const top = topWithOthers(reps, 8);
-  st.charts.rRep = new window.Chart($('rRepChart'), { type: 'bar', data: { labels: top.map((r) => r.rep), datasets: [
+  if (!onePage) st.charts.rRep = new window.Chart($('rRepChart'), { type: 'bar', data: { labels: top.map((r) => r.rep), datasets: [
     { label: 'المبيعات', data: top.map((r) => r.sales / 100), backgroundColor: accent, borderRadius: 3 },
     { label: 'المحصَّل', data: top.map((r) => r.paid / 100), backgroundColor: warn, borderRadius: 3 }] },
   options: { ...base, indexAxis: 'y', scales: { x: axis((v) => compact.format(v)), y: { ...axis(), grid: { display: false } } } } });
@@ -559,6 +593,7 @@ $('cancelBtn').onclick = () => $('dlg').close();
 $('files').onchange = (e) => previewFiles([...e.target.files]);
 $('saveBtn').onclick = saveImport;
 $('from').onchange = $('to').onchange = render;
+$('viewMode').onclick = (e) => { const b = e.target.closest('[data-view]'); if (b) { st.view = b.dataset.view; render(); } };
 $('presets').onclick = (e) => {
   const b = e.target.closest('[data-preset]'); if (!b) return;
   const { start, end } = dataRange();

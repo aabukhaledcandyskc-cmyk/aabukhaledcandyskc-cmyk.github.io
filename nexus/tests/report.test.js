@@ -76,3 +76,35 @@ test('numbers use left-to-right isolates so % and thousands separators stay put'
   assert.match(r[0].text, /\u2066100%\u2069/);
   assert.equal(ltr('1%'), '\u20661%\u2069');
 });
+
+import { repInsights, reportMode } from '../src/report.js';
+const strip = (s) => s.replace(/[⁦⁨⁩]/g, '');
+test('rep insights compare the rep with the whole company', () => {
+  const r = repInsights({
+    rep: 'أ', k: { sales: 30000, paidPct: 80 }, pk: { sales: 20000 }, company: { sales: 120000, paidPct: 60 },
+    rank: 2, repCount: 9, newCust: 4, monthly: [{ month: '2026-08', sales: 10 }, { month: '2026-09', sales: 20 }], debtors: [{ customer: 'ع', net: 900 }], overpaid: 0,
+  }, fmt);
+  const t = r.map((x) => strip(x.text)).join('\n');
+  assert.match(t, /أ: مبيعات 300 ر\.س، أي 25\.0% من مبيعات الشركة.*المرتبة 2 من 9/);
+  assert.match(t, /نسبة التحصيل 80\.0% مقابل 60\.0% للشركة/);
+  assert.match(t, /ارتفعت 50\.0% عن الفترة السابقة/);
+  assert.match(t, /4 عميل جديد/);
+  assert.equal(r.find((x) => /نسبة التحصيل/.test(x.text)).kind, 'good');
+});
+test('rep insights flag a collection rate below 50% as bad and below company as warn', () => {
+  const base = { rep: 'أ', pk: null, company: { sales: 1000, paidPct: 70 }, rank: 1, repCount: 2, newCust: 0, monthly: [], debtors: [], overpaid: 0 };
+  assert.equal(repInsights({ ...base, k: { sales: 500, paidPct: 40 } }, fmt).find((x) => /التحصيل/.test(x.text)).kind, 'bad');
+  assert.equal(repInsights({ ...base, k: { sales: 500, paidPct: 60 } }, fmt).find((x) => /التحصيل/.test(x.text)).kind, 'warn');
+});
+test('rep insights never show a percent change off a negative base', () => {
+  const r = repInsights({ rep: 'أ', k: { sales: -100, paidPct: 0 }, pk: { sales: 50 }, company: { sales: 0, paidPct: 0 }, rank: 1, repCount: 1, newCust: 0, monthly: [], debtors: [], overpaid: 0 }, fmt);
+  assert.equal(r.some((x) => /الفترة السابقة/.test(x.text)), false);
+});
+test('report mode: auto goes one-page for up to three reps, override wins', () => {
+  assert.equal(reportMode('auto', 1), 'compact');
+  assert.equal(reportMode('auto', 3), 'compact');
+  assert.equal(reportMode('auto', 4), 'full');
+  assert.equal(reportMode('auto', 0), 'full');
+  assert.equal(reportMode('compact', 20), 'compact');
+  assert.equal(reportMode('full', 1), 'full');
+});

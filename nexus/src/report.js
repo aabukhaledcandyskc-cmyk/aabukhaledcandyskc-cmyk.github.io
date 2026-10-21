@@ -78,3 +78,33 @@ export function insights({ reps, totals, prevTotals, monthly, debtors, overpaid 
   if (overpaid > 0) out.push({ kind: 'info', text: `${ltr(overpaid)} فاتورة دفعتها أكبر من إجماليها؛ تُحتسب كما هي في دفترة وتُخفض غير المدفوع.` });
   return out.slice(0, 6);
 }
+
+// Insights for a report that is about one rep: how that rep sits against the whole company in the same period.
+// company = totals of ALL reps for the period; rank is 1-based among reps with sales.
+export function repInsights({ rep, k, pk, company, rank, repCount, newCust, monthly, debtors, overpaid }, fmt) {
+  const out = [];
+  if (company.sales > 0) {
+    out.push({ kind: 'info', text: `${iso(rep)}: مبيعات ${ltr(fmt.money(k.sales))}، أي ${ltr(fmt.pct((k.sales / company.sales) * 100))} من مبيعات الشركة في الفترة (المرتبة ${ltr(rank)} من ${ltr(repCount)}).` });
+  }
+  if (k.sales > 0 && company.sales > 0) {
+    const diff = k.paidPct - company.paidPct;
+    out.push({ kind: diff >= 0 ? 'good' : (k.paidPct < 50 ? 'bad' : 'warn'), text: `نسبة التحصيل ${ltr(fmt.pct(k.paidPct))} مقابل ${ltr(fmt.pct(company.paidPct))} للشركة.` });
+  }
+  const g = pk ? deltaPct(k.sales, pk.sales) : null;
+  if (g !== null && k.sales >= 0 && pk.sales >= 0) out.push({ kind: g >= 0 ? 'good' : 'bad', text: `المبيعات ${g >= 0 ? 'ارتفعت' : 'انخفضت'} ${ltr(fmt.pct(Math.abs(g)))} عن الفترة السابقة (${ltr(fmt.money(pk.sales))}).` });
+  if (newCust > 0) out.push({ kind: 'good', text: `${ltr(newCust)} عميل جديد (أول فاتورة لهم ضمن الفترة).` });
+  if (monthly.length >= 2) {
+    const peak = monthly.reduce((a, b) => (b.sales > a.sales ? b : a));
+    out.push({ kind: 'info', text: `شهر الذروة: ${iso(fmt.month(peak.month))} بمبيعات ${ltr(fmt.money(peak.sales))}.` });
+  }
+  if (debtors.length) out.push({ kind: 'warn', text: `أكبر رصيد مدين: ${iso(debtors[0].customer)} بـ ${ltr(fmt.money(debtors[0].net))}.` });
+  if (overpaid > 0) out.push({ kind: 'info', text: `${ltr(overpaid)} فاتورة دفعتها أكبر من إجماليها.` });
+  return out.slice(0, 6);
+}
+
+// One page when the report is about up to three reps; the full three pages otherwise. `view` is the user's override.
+export function reportMode(view, repsWithData) {
+  if (view === 'compact') return 'compact';
+  if (view === 'full') return 'full';
+  return repsWithData > 0 && repsWithData <= 3 ? 'compact' : 'full';
+}
