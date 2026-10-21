@@ -177,9 +177,7 @@ function render() {
 
   const reps = repSummary(c.s, c.p);
   renderRepTable(reps, tmap, newBy);
-  const low = reps.filter((r) => r.sales > 0 && r.paidPct < 50);
-  $('alerts').innerHTML = low.length ? `<div class="notice">تنبيه: نسبة التحصيل أقل من 50% عند: ${low.map((r) => `${escapeHtml(r.rep)} (${r.paidPct.toFixed(1)}%)`).join('، ')}</div>` : '';
-  if (st.tab === 'summary') renderCharts(reps, weeklyTrend(c.s, c.p));
+  if (st.tab === 'summary') renderDetail(c, reps, k, totalNew, newUnreliable);
   $('rangeInfo').textContent = st.sales.length ? `${int(c.s.length)} صف مبيعات، ${int(c.p.length)} سند ضمن الفلاتر` : '';
   renderPrintHead(c);
   renderPane(c);
@@ -196,26 +194,32 @@ function sortTh(key, label, extra = '') {
   return `<th class="sortable ${extra}" data-sort="${key}" tabindex="0" role="columnheader" aria-sort="${on ? (st.repSort.dir === 'asc' ? 'ascending' : 'descending') : 'none'}">${label}${arrow}</th>`;
 }
 function renderRepTable(reps, tmap, newBy) {
+  const hasTargets = tmap.size > 0;
+  const hasMeta = [...st.meta.values()].some((m) => m.region || m.position); // classification columns only when someone filled them
   const rows = sortRows(reps.map((r) => ({ ...r, newCust: newBy.get(r.rep) ?? 0, ...(st.meta.get(r.rep) ?? {}), tSales: progressPct(r.sales, tmap.get(r.rep)?.sales ?? 0), tColl: progressPct(r.receipts, tmap.get(r.rep)?.collection ?? 0) })), st.repSort.key, st.repSort.dir);
   const tot = { ...totalsRow(reps), newCust: [...newBy.values()].reduce((a, x) => a + x, 0) };
-  const hasTargets = tmap.size > 0;
+  const maxSales = Math.max(1, ...rows.map((r) => r.sales));
+  const w = (v) => `style="--w:${Math.max(0, Math.min(100, v)).toFixed(1)}%"`;
   const line = (r, isTotal) => `<tr class="${isTotal ? 'total' : ''}"><td>${isTotal ? '<b>الإجمالي</b>' : `<button class="link" data-rep="${escapeHtml(r.rep)}" aria-label="بطاقة ${escapeHtml(r.rep)}">${escapeHtml(r.rep)}</button>`}</td>
-    <td class="n">${money(r.sales)}</td><td class="n">${money(r.paid)}</td><td class="n">${money(r.unpaid)}</td><td class="n">${money(r.receipts)}</td>
-    <td class="n ${!isTotal && r.paidPct < 50 ? 'low' : ''}">${r.paidPct.toFixed(1)}%</td><td class="n">${int(r.invoices)}</td><td class="n">${int(r.newCust)}</td><td class="n">${pctText(r.returnRate)}</td>
-    <td>${isTotal ? '' : escapeHtml(r.region ?? '')}</td><td>${isTotal ? '' : escapeHtml(r.position ?? '')}</td>
-    <td>${isTotal ? '' : progress(hasTargets ? r.tSales : null)}</td><td>${isTotal ? '' : progress(hasTargets ? r.tColl : null)}</td></tr>`;
+    <td class="n ${isTotal ? '' : 'dbar'}" ${isTotal ? '' : w((r.sales / maxSales) * 100)}>${money(r.sales)}</td><td class="n">${money(r.paid)}</td><td class="n">${money(r.unpaid)}</td><td class="n">${money(r.receipts)}</td>
+    ${r.sales > 0 ? `<td class="n dbar pct ${!isTotal && r.paidPct < 50 ? 'low' : ''}" ${w(r.paidPct)}>${r.paidPct.toFixed(1)}%</td>` : '<td class="n"><span class="muted">—</span></td>'}<td class="n">${int(r.invoices)}</td><td class="n">${int(r.newCust)}</td><td class="n">${pctText(r.returnRate)}</td>
+    ${hasMeta ? `<td>${isTotal ? '' : escapeHtml(r.region ?? '')}</td><td>${isTotal ? '' : escapeHtml(r.position ?? '')}</td>` : ''}
+    ${hasTargets ? `<td>${isTotal ? '' : progress(r.tSales)}</td><td>${isTotal ? '' : progress(r.tColl)}</td>` : ''}</tr>`;
+  const arrow = (k) => (st.repSort.key === k ? (st.repSort.dir === 'asc' ? ' ▲' : ' ▼') : '');
+  const span2 = (th) => th.replace('<th ', '<th rowspan="2" ');
+  const tip = (th, t) => th.replace('<th ', `<th title="${t}" `);
   $('reps').innerHTML = `<thead>
-    <tr><th rowspan="2" class="sortable" data-sort="rep" tabindex="0" aria-sort="${st.repSort.key === 'rep' ? (st.repSort.dir === 'asc' ? 'ascending' : 'descending') : 'none'}">الموظف / المندوب <span class="muted">(اضغط لعرض البطاقة)</span>${st.repSort.key === 'rep' ? (st.repSort.dir === 'asc' ? ' ▲' : ' ▼') : ''}</th>
+    <tr><th rowspan="2" class="sortable" data-sort="rep" tabindex="0" aria-sort="${st.repSort.key === 'rep' ? (st.repSort.dir === 'asc' ? 'ascending' : 'descending') : 'none'}">الموظف / المندوب${arrow('rep')} <span class="muted">(اضغط للبطاقة)</span></th>
       <th colspan="3" class="grp">المبيعات</th>
-      ${sortTh('receipts', 'التحصيلات المسجلة', 'n').replace('<th ', '<th rowspan="2" ')}
-      ${sortTh('paidPct', 'نسبة التحصيل', 'n').replace('<th ', '<th rowspan="2" title="المدفوع من فواتير الفترة ÷ إجمالي المبيعات. التحصيلات المسجلة تشمل سندات فواتير فترات سابقة، لذلك قد تختلف عنه." ')}
-      ${sortTh('invoices', 'عدد الفواتير', 'n').replace('<th ', '<th rowspan="2" ')}
-      ${sortTh('newCust', 'عملاء جدد', 'n').replace('<th ', '<th rowspan="2" title="عملاء كانت أول فاتورة لهم ضمن الفترة، وتُنسب للمندوب الذي أصدرها. تعتمد على الفواتير المستوردة فقط." ')}
-      ${sortTh('returnRate', 'معدل المرتجعات', 'n').replace('<th ', '<th rowspan="2" title="المرتجعات (مجموع عمود المرتجع الخام) ÷ مبيعات الفواتير الموجبة. قد يظهر سالباً إذا سُجّلت فاتورة المرتجع عند مندوب أو في فترة غير فاتورتها الأصلية." ')}
-      <th colspan="4" class="grp">التصنيف والأهداف</th></tr>
+      ${span2(sortTh('receipts', 'التحصيلات المسجلة', 'n'))}
+      ${span2(tip(sortTh('paidPct', 'نسبة التحصيل', 'n'), 'المدفوع من فواتير الفترة ÷ إجمالي المبيعات. التحصيلات المسجلة تشمل سندات فواتير فترات سابقة، لذلك قد تختلف عنه.'))}
+      ${span2(sortTh('invoices', 'الفواتير', 'n'))}
+      ${span2(tip(sortTh('newCust', 'عملاء جدد', 'n'), 'عملاء كانت أول فاتورة لهم ضمن الفترة، وتُنسب للمندوب الذي أصدرها. تعتمد على الفواتير المستوردة فقط.'))}
+      ${span2(tip(sortTh('returnRate', 'مرتجعات %', 'n'), 'المرتجعات (مجموع عمود المرتجع الخام) ÷ مبيعات الفواتير الموجبة. قد يظهر سالباً إذا سُجّلت فاتورة المرتجع عند مندوب أو في فترة غير فاتورتها الأصلية.'))}
+      ${hasMeta ? '<th colspan="2" class="grp">التصنيف</th>' : ''}${hasTargets ? '<th colspan="2" class="grp">تحقيق الأهداف</th>' : ''}</tr>
     <tr>${REP_COLS.map((c) => sortTh(c.key, c.label, 'n sub')).join('')}
-      ${sortTh('region', 'المنطقة', 'sub')}${sortTh('position', 'المنصب', 'sub')}${sortTh('tSales', 'هدف المبيعات', 'sub')}${sortTh('tColl', 'هدف التحصيل', 'sub')}</tr></thead>
-    <tbody>${rows.map((r) => line(r, false)).join('') || '<tr><td colspan="13" class="muted">لا توجد بيانات — استورد ملفات دفترة أولاً</td></tr>'}</tbody>
+      ${hasMeta ? `${sortTh('region', 'المنطقة', 'sub')}${sortTh('position', 'المنصب', 'sub')}` : ''}${hasTargets ? `${sortTh('tSales', 'مبيعات', 'sub')}${sortTh('tColl', 'تحصيل', 'sub')}` : ''}</tr></thead>
+    <tbody>${rows.map((r) => line(r, false)).join('') || `<tr><td colspan="9" class="muted">لا توجد بيانات — استورد ملفات دفترة أولاً</td></tr>`}</tbody>
     ${rows.length ? `<tfoot>${line(tot, true)}</tfoot>` : ''}`;
 }
 
@@ -241,6 +245,8 @@ function openRepCard(rep) {
   $('repCard').showModal();
 }
 
+const lrNum = (x) => `\u2066${x}\u2069`;
+const lrName = (x) => `\u2068${x}\u2069`;
 const fmtMonth = (m) => `${MONTHS[Number(m.slice(5, 7)) - 1]} ${m.slice(0, 4)}`;
 const compact = new Intl.NumberFormat('en', { notation: 'compact', maximumFractionDigits: 1 });
 
@@ -379,25 +385,50 @@ function renderPrintHead(c) {
     <div class="m">طُبع في <bdi dir="ltr">${new Date().toLocaleString('en-GB', { dateStyle: 'short', timeStyle: 'short' })}</bdi> &nbsp;|&nbsp; الإصدار ${NEXUS_VERSION}</div>`;
 }
 
-function renderCharts(reps, trend) {
+// The compact one-page analysis: a slim KPI strip, the rep table with in-cell bars, and a side column
+// (trend, debt ageing, alerts). Data bars in the table replace the old tall bar chart that repeated the same numbers.
+function renderDetail(c, reps, k, totalNew, unreliable) {
+  const item = (l, v) => `<div class="si"><div class="l">${l}</div><div class="v">${v}</div></div>`;
+  $('dStrip').innerHTML = [
+    item('المبيعات', money(k.sales)), item('نسبة التحصيل', `${k.paidPct.toFixed(1)}%`), item('المقبوضات', money(k.receipts)),
+    item('غير المدفوع', money(k.unpaid)), item('المرتجعات', money(k.returns)), item('الفواتير', int(k.invoiceCount)),
+    item('العملاء النشطون', int(k.activeCustomers)), item('عملاء جدد', unreliable ? '—' : int(totalNew)),
+  ].join('');
+
+  const asOf = c.to || today();
+  const debtors = agingByCustomer(c.s, asOf);
+  const sumB = (f) => debtors.reduce((a, x) => a + x[f], 0);
+  const buckets = [['حتى 30', sumB('b0')], ['31 إلى 60', sumB('b30')], ['61 إلى 90', sumB('b60')], ['أكثر من 90', sumB('b90')]];
+  const totalDebt = buckets.reduce((a, x) => a + x[1], 0);
+
+  const alerts = [];
+  const material = reps.filter((r) => r.sales > 0 && r.sales >= k.sales * 0.03);
+  const low = material.filter((r) => r.paidPct < 50);
+  if (low.length) alerts.push({ kind: 'bad', text: `نسبة التحصيل أقل من 50%: ${low.map((r) => `${lrName(r.rep)} (${lrNum(r.paidPct.toFixed(1))}%)`).join('، ')}.` });
+  if (buckets[3][1] > 0) alerts.push({ kind: 'warn', text: `ديون أقدم من 90 يوماً: ${lrNum(money(buckets[3][1]))} (${lrNum(totalDebt ? ((buckets[3][1] / totalDebt) * 100).toFixed(0) : 0)}% من الأرصدة المدينة).` });
+  if (k.overpaid) alerts.push({ kind: 'info', text: `${lrNum(k.overpaid)} فاتورة دفعتها أكبر من إجماليها.` });
+  if (k.discrepancies) alerts.push({ kind: 'warn', text: `${lrNum(k.discrepancies)} فاتورة إجماليها لا يساوي مدفوعها + غير مدفوعها + مرتجعها.` });
+  if (unreliable) alerts.push({ kind: 'info', text: 'العملاء الجدد غير معروضين: الفترة تلامس بداية بياناتك.' });
+  $('dAlerts').innerHTML = alerts.map((a) => `<li class="${a.kind}">${escapeHtml(a.text)}</li>`).join('') || '<li class="muted">لا تنبيهات.</li>';
+  $('agingMini').textContent = `بالأيام. الأرصدة المدينة ${money(totalDebt)} لدى ${int(debtors.length)} عميلاً (حتى ${asOf}).`;
+
   if (!window.Chart) return;
   const css = getComputedStyle(document.documentElement);
-  const light = st.printing; // paper is always white, so draw the charts with the light palette
-  const text = light ? '#111' : css.getPropertyValue('--text').trim(), grid = light ? '#d5d9e0' : css.getPropertyValue('--line').trim();
-  const accent = light ? '#0f766e' : css.getPropertyValue('--accent').trim(), warn = light ? '#b45309' : css.getPropertyValue('--warn').trim();
-  const fmt = (v) => Number(v).toLocaleString('en-US', { maximumFractionDigits: 0 });
-  const common = { responsive: true, maintainAspectRatio: false, animation: light ? false : undefined, plugins: { legend: { labels: { color: text } } } };
-  const axis = (ticks = {}) => ({ ticks: { color: text, ...ticks }, grid: { color: grid } });
-  const top = reps.filter((r) => r.sales > 0);
-  $('repBox').style.height = `${Math.max(260, top.length * 30 + 80)}px`;
-  st.charts.rep?.destroy(); st.charts.trend?.destroy();
-  st.charts.rep = new window.Chart($('repChart'), { type: 'bar', data: { labels: top.map((r) => r.rep), datasets: [
-    { label: 'المبيعات', data: top.map((r) => r.sales / 100), backgroundColor: accent }, { label: 'التحصيل', data: top.map((r) => r.paid / 100), backgroundColor: warn }] },
-  options: { ...common, indexAxis: 'y', scales: { x: axis({ callback: fmt }), y: axis() } } });
-  st.charts.trend = new window.Chart($('trendChart'), { type: 'line', data: { labels: trend.map((w) => w.week), datasets: [
-    { label: 'المبيعات', data: trend.map((w) => w.sales / 100), borderColor: accent, backgroundColor: accent, tension: .25, pointRadius: 0 },
-    { label: 'المقبوضات', data: trend.map((w) => w.receipts / 100), borderColor: warn, backgroundColor: warn, tension: .25, pointRadius: 0 }] },
-  options: { ...common, interaction: { mode: 'index', intersect: false }, scales: { x: axis(), y: axis({ callback: fmt }) } } });
+  const pick = (v, fb) => (st.printing ? fb : css.getPropertyValue(v).trim());
+  const text = pick('--text', '#111'), grid = pick('--line', '#d5d9e0'), accent = pick('--accent', '#0f766e'), warn = pick('--warn', '#b45309'), bad = pick('--bad', '#b42318');
+  const size = st.printing ? 9 : 12;
+  const axis = (cb) => ({ ticks: { color: text, font: { size }, ...(cb ? { callback: cb } : {}) }, grid: { color: grid } });
+  const base = { responsive: true, maintainAspectRatio: false, animation: st.printing ? false : undefined, plugins: { legend: { labels: { color: text, font: { size }, boxWidth: 12 } } } };
+  st.charts.trend?.destroy(); st.charts.aging?.destroy();
+  const monthly = monthlyBreakdown(c.s, c.p), weekly = monthly.length < 3;
+  const series = weekly ? weeklyTrend(c.s, c.p).map((w) => ({ label: w.week.slice(5), sales: w.sales, receipts: w.receipts })) : monthly.map((m) => ({ label: monthly.length > 6 ? m.month.slice(2) : fmtMonth(m.month), sales: m.sales, receipts: m.receipts }));
+  $('dTrendTitle').textContent = weekly ? 'الاتجاه الأسبوعي (بداية الأسبوع)' : 'الاتجاه الشهري';
+  st.charts.trend = new window.Chart($('trendChart'), { type: series.length <= 6 ? 'bar' : 'line', data: { labels: series.map((x) => x.label), datasets: [
+    { label: 'المبيعات', data: series.map((x) => x.sales / 100), borderColor: accent, backgroundColor: accent, tension: .25, pointRadius: 0, borderRadius: 2 },
+    { label: 'المقبوضات', data: series.map((x) => x.receipts / 100), borderColor: warn, backgroundColor: warn, tension: .25, pointRadius: 0, borderRadius: 2 }] },
+  options: { ...base, interaction: { mode: 'index', intersect: false }, scales: { x: { ...axis(), grid: { display: false }, ticks: { color: text, font: { size }, maxTicksLimit: 8 } }, y: axis((v) => compact.format(v)) } } });
+  st.charts.aging = new window.Chart($('agingChart'), { type: 'bar', data: { labels: buckets.map((x) => x[0]), datasets: [{ label: 'الرصيد', data: buckets.map((x) => x[1] / 100), backgroundColor: [accent, accent, warn, bad], borderRadius: 3 }] },
+    options: { ...base, plugins: { legend: { display: false } }, scales: { x: { ...axis(), grid: { display: false } }, y: axis((v) => compact.format(v)) } } });
 }
 
 // ---- tabs with raw lists

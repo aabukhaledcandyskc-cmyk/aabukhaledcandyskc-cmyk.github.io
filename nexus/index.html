@@ -90,7 +90,7 @@ th:focus-visible,button.link:focus-visible{outline:2px solid var(--accent);outli
 
 /* ---------- report page (screen presentation + paper) ---------- */
 .filters{display:flex;flex-wrap:wrap;gap:8px;align-items:center;width:100%}.chips{display:inline-flex;flex-wrap:wrap;gap:4px}.chips button{padding:5px 10px;font-size:13px}.chips button.on{background:var(--accent);color:#fff;border-color:var(--accent)}
-body[data-tab=report] #kpis,body[data-tab=report] #targetCards{display:none}
+body[data-tab=report] #kpis,body[data-tab=report] #targetCards,body[data-tab=summary] #kpis,body[data-tab=summary] #targetCards{display:none}
 .report{--u:clamp(14px,.82vw,17px);font-size:var(--u);display:grid;gap:1.4em;max-width:1500px;margin:0 auto}
 .page{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:1.3em 1.6em;display:flex;flex-direction:column;gap:1.1em}
 .rhead{display:flex;justify-content:space-between;align-items:flex-end;gap:1em;padding-bottom:.8em;border-bottom:3px solid var(--accent)}
@@ -121,6 +121,20 @@ body[data-tab=report] #kpis,body[data-tab=report] #targetCards{display:none}
 /* while printing the report is laid out at paper width BEFORE charts are drawn, so nothing is clipped */
 body.printing .report{width:1050px;max-width:1050px;margin:0 auto}
 .rfoot{margin-top:auto;color:var(--muted);font-size:.82em;border-top:1px solid var(--line);padding-top:.6em}
+/* ---------- detailed analysis on ONE page ---------- */
+.dpage{--u:clamp(13px,.8vw,16px);font-size:var(--u)}
+.dstrip{display:grid;grid-template-columns:repeat(auto-fit,minmax(9em,1fr));gap:.6em;margin-bottom:.8em}
+.dstrip .si{border:1px solid var(--line);border-radius:10px;padding:.4em .7em;background:var(--card)}
+.dstrip .l{color:var(--muted);font-size:.78em}.dstrip .v{font-weight:800;font-size:1.15em;direction:ltr;unicode-bidi:isolate;text-align:right;font-variant-numeric:tabular-nums}
+.dgrid{display:grid;grid-template-columns:minmax(0,1fr) 27em;gap:.8em;align-items:start}
+.dside{display:grid;gap:.8em}.dside .rbox.short{height:11em}.dside .muted{margin:.4em 0 0;font-size:.8em}
+.dtable{padding:0;overflow:hidden}.dtable .tablewrap{border:0;border-radius:0}
+.dpage .repwrap{max-height:none;overflow:visible}
+#reps td,#reps th{padding:.22em .6em}
+#reps .dbar{background:linear-gradient(to left,color-mix(in srgb,var(--accent) 24%,transparent) var(--w),transparent var(--w))}
+#reps .dbar.pct{background:linear-gradient(to left,color-mix(in srgb,var(--warn) 26%,transparent) var(--w),transparent var(--w))}
+#reps .dbar.low{background:linear-gradient(to left,color-mix(in srgb,var(--bad) 22%,transparent) var(--w),transparent var(--w))}
+@media screen and (max-width:1100px){.dgrid{grid-template-columns:1fr}}
 /* ---------- one-page (compact) report ---------- */
 .report.compact #rp2,.report.compact #rp3{display:none}
 .report.compact .rbox.short{height:15em}
@@ -143,6 +157,13 @@ body.presenting .rbox{height:44vh}body.presenting .rbox.short{height:24vh}body.p
   .report.compact .rbox.short{height:185px}.report.compact .rtable{font-size:10px}.report.compact .rtable td,.report.compact .rtable th{padding:2px 6px}
   .report.compact .tile{padding:4px 8px}.report.compact .tile .v{font-size:16px}.report.compact .page{gap:6px}
   .report.compact .mini{padding-block:0}
+  /* detailed analysis: one landscape page */
+  .dpage{--u:9.5px;font-size:9.5px}.dgrid{grid-template-columns:minmax(0,1fr) 235px;gap:8px}
+  .dstrip{grid-template-columns:repeat(8,1fr);gap:4px;margin-bottom:6px}.dstrip .si{padding:3px 6px}
+  #reps td,#reps th{padding:2.6px 4px;font-size:10.5px}#reps thead th{padding:3px 4px}#reps th .muted{display:none}
+  .dpage{--u:10.5px;font-size:10.5px}.dstrip .v{font-size:13px}
+  .dside{gap:7px}.dside .rbox.short{height:150px}.dside .panel{padding:6px 9px}.dside .ins{gap:4px}
+  #reps .dbar,#reps .dbar.pct,#reps .dbar.low{-webkit-print-color-adjust:exact}
   .rhead{padding-bottom:5px;border-bottom:2px solid #0f766e}.rhead .rt{font-size:19px}.rhead.slim .rt{font-size:15px}
   .tile{background:#fff;padding:6px 9px;break-inside:avoid}.tile .v{font-size:19px}
   .mini .v{font-size:14px}
@@ -226,15 +247,19 @@ body.presenting .rbox{height:44vh}body.presenting .rbox.short{height:24vh}body.p
   </section>
 
   <section class="pane" id="pane-summary">
-    <div class="charts">
-      <div class="card"><div class="l">المبيعات مقابل التحصيل حسب المندوب</div><div class="cbox" id="repBox"><canvas id="repChart"></canvas></div></div>
-      <div class="card"><div class="l">الاتجاه الأسبوعي: المبيعات والمقبوضات</div><div class="cbox"><canvas id="trendChart"></canvas></div></div>
+    <div class="dpage" id="dpage">
+      <div class="dstrip" id="dStrip"></div>
+      <div class="dgrid">
+        <section class="panel dtable"><div class="tablewrap repwrap"><table id="reps"></table></div></section>
+        <div class="dside">
+          <section class="panel"><h3 id="dTrendTitle">الاتجاه</h3><div class="rbox short"><canvas id="trendChart"></canvas></div></section>
+          <section class="panel"><h3>أعمار الديون</h3><div class="rbox short"><canvas id="agingChart"></canvas></div><p class="muted" id="agingMini"></p></section>
+          <section class="panel"><h3>تنبيهات</h3><ul class="ins" id="dAlerts"></ul></section>
+        </div>
+      </div>
     </div>
-    <div id="alerts"></div>
-    <h2>ملخص أداء المناديب</h2>
-    <div class="tablewrap repwrap"><table id="reps"></table></div>
-    <div class="noprint"><h2>آخر عمليات الاستيراد</h2>
-    <div class="tablewrap"><table id="log"></table></div></div>
+    <details class="noprint" style="margin-top:12px"><summary class="muted" style="cursor:pointer">آخر عمليات الاستيراد</summary>
+    <div class="tablewrap" style="margin-top:6px"><table id="log"></table></div></details>
   </section>
 
   <section class="pane" id="pane-aging">
