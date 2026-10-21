@@ -12,7 +12,7 @@ const data = dataFile ? JSON.parse(fs.readFileSync(dataFile, 'utf8')) : null;
 const strip = (src) => src
   .replace(/^import[\s\S]*?from\s+['"][^'"]+['"];?\n/gm, '')
   .replace(/^export\s+(async\s+)?(function|const|class)/gm, '$1$2');
-const modules = ['csv', 'shared', 'daftra', 'ledger', 'store', 'kpi', 'verify', 'excel', 'config', 'app']
+const modules = ['csv', 'shared', 'daftra', 'ledger', 'store', 'kpi', 'verify', 'excel', 'report', 'config', 'app']
   .map((f) => strip(read(`src/${f}.js`))).join('\n');
 const inline = (file) => `<script>${read(file).replaceAll('</script', '<\\/script')}</script>`;
 

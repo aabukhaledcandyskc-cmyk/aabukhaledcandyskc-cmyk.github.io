@@ -163,3 +163,10 @@ test('new-customer figure is flagged unreliable near the start of the data', () 
   assert.equal(newCustomersUnreliable(all, '2025-11-01'), false);  // 110 days in
   assert.equal(newCustomersUnreliable([], '2025-11-01'), false);
 });
+
+import { topCustomers } from '../src/kpi.js';
+test('top customers by net sales; credit-note-only customers and nameless rows excluded', () => {
+  const S = (customer, total) => ({ customer, total });
+  const r = topCustomers([S('أ', 100), S('أ', 50), S('ب', 200), S('ب', -250), S('ج', 10), S('', 999)], 2);
+  assert.deepEqual(r.map((x) => [x.customer, x.sales, x.invoices]), [['أ', 150, 2], ['ج', 10, 1]]);
+});

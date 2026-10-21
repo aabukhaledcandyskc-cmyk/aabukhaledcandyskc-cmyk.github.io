@@ -4,7 +4,7 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "check": "node --check src/csv.js && node --check src/shared.js && node --check src/daftra.js && node --check src/store.js && node --check src/kpi.js && node --check src/ledger.js && node --check src/rpc.js && node --check src/verify.js && node --check src/excel.js",
+    "check": "node --check src/csv.js && node --check src/shared.js && node --check src/daftra.js && node --check src/store.js && node --check src/kpi.js && node --check src/ledger.js && node --check src/rpc.js && node --check src/verify.js && node --check src/excel.js && node --check src/report.js",
     "verify": "node scripts/verify.mjs",
     "test": "node --test \"tests/*.test.js\""
   },

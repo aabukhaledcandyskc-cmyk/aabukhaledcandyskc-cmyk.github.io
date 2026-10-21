@@ -4,12 +4,13 @@ import { browserStore } from './store.js';
 import {
   computeKpis, repSummary, totalsRow, sortRows, monthlyBreakdown, filterByPeriod, weeklyTrend, allowedReps, restrictToReps,
   monthsInRange, targetsByRep, targetKey, progressPct, agingByCustomer,
-  firstInvoices, newCustomersByRep, newCustomersUnreliable,
+  firstInvoices, newCustomersByRep, newCustomersUnreliable, topCustomers,
 } from './kpi.js';
 import { toCents, fromCents } from './shared.js';
 import { parseLedger } from './ledger.js';
 import { buildChecks, compactLedger, compareWithDaftra } from './verify.js';
 import { rowsFromWorkbook, workbookFromRows } from './excel.js';
+import { previousPeriod, deltaPct, presetRange, topWithOthers, insights } from './report.js';
 import { NEXUS_VERSION } from './config.js';
 
 const $ = (id) => document.getElementById(id);
@@ -23,8 +24,8 @@ const SYSTEM_KEY = '__system';
 
 const st = {
   sales: [], payments: [], meta: new Map(), targets: [], system: { name: 'NEXUS Dashboard', logo: '' },
-  sel: { reps: new Set(), regions: new Set(), positions: new Set(), statuses: new Set() }, ledger: null, theme: null, first: new Map(),
-  tab: 'summary', repSort: { key: 'sales', dir: 'desc' }, invLimit: 300, payLimit: 300, pending: [], charts: {},
+  sel: { reps: new Set(), regions: new Set(), positions: new Set(), statuses: new Set() }, ledger: null, theme: null, first: new Map(), badge: null,
+  tab: 'report', repSort: { key: 'sales', dir: 'desc' }, invLimit: 300, payLimit: 300, pending: [], charts: {},
 };
 
 $('version').textContent = `الإصدار ${NEXUS_VERSION}`;
@@ -125,14 +126,22 @@ for (const m of MSELS) {
   };
 }
 
+function sliceRows(from, to, allowed) {
+  const stSel = st.sel.statuses;
+  return {
+    s: restrictToReps(filterByPeriod(st.sales, { from, to }), allowed).filter((r) => !stSel.size || stSel.has(r.status ?? '')),
+    p: restrictToReps(filterByPeriod(st.payments, { from, to }), allowed),
+  };
+}
 function current() {
   const from = $('from').value, to = $('to').value;
   const allowed = allowedReps(allRepNames(), st.meta, st.sel);
-  const stSel = st.sel.statuses;
-  const s = restrictToReps(filterByPeriod(st.sales, { from, to }), allowed).filter((r) => !stSel.size || stSel.has(r.status ?? ''));
-  const p = restrictToReps(filterByPeriod(st.payments, { from, to }), allowed);
-  return { from, to, allowed, s, p };
+  return { from, to, allowed, ...sliceRows(from, to, allowed) };
 }
+const dataRange = () => {
+  const d = [...st.sales, ...st.payments].map((r) => r.date).sort();
+  return { start: d[0] ?? '', end: d.at(-1) ?? '' };
+};
 
 // ---------------------------------------------------------------- rendering
 const progress = (pct) => (pct === null ? '<span class="muted">—</span>'
@@ -140,6 +149,7 @@ const progress = (pct) => (pct === null ? '<span class="muted">—</span>'
 
 function render() {
   document.body.dataset.tab = st.tab; // lets the print stylesheet know which tab is on paper
+  markPreset();
   const c = current();
   const k = computeKpis(c.s, c.p);
   const newBy = newCustomersByRep(st.first, { from: c.from, to: c.to }, c.allowed);
@@ -168,7 +178,7 @@ function render() {
   renderRepTable(reps, tmap, newBy);
   const low = reps.filter((r) => r.sales > 0 && r.paidPct < 50);
   $('alerts').innerHTML = low.length ? `<div class="notice">تنبيه: نسبة التحصيل أقل من 50% عند: ${low.map((r) => `${escapeHtml(r.rep)} (${r.paidPct.toFixed(1)}%)`).join('، ')}</div>` : '';
-  renderCharts(reps, weeklyTrend(c.s, c.p));
+  if (st.tab === 'summary') renderCharts(reps, weeklyTrend(c.s, c.p));
   $('rangeInfo').textContent = st.sales.length ? `${int(c.s.length)} صف مبيعات، ${int(c.p.length)} سند ضمن الفلاتر` : '';
   renderPrintHead(c);
   renderPane(c);
@@ -230,7 +240,102 @@ function openRepCard(rep) {
   $('repCard').showModal();
 }
 
-const TAB_TITLE = { summary: 'ملخص الأداء', aging: 'أكبر العملاء مدينية', invoices: 'الفواتير', payments: 'السندات', verify: 'التحقق من الأرقام' };
+const fmtMonth = (m) => `${MONTHS[Number(m.slice(5, 7)) - 1]} ${m.slice(0, 4)}`;
+const compact = new Intl.NumberFormat('en', { notation: 'compact', maximumFractionDigits: 1 });
+
+function chip(cur, prev, goodWhenUp = true, points = false) {
+  if (prev === null || prev === undefined) return '<span class="dchip none">&nbsp;</span>'; // no previous period: stay quiet, the footer explains
+  if (!points && (cur < 0 || prev < 0)) return '<span class="dchip flat">—</span>'; // % change of a negative balance is meaningless
+  const d = points ? cur - prev : deltaPct(cur, prev);
+  if (d === null) return '<span class="dchip flat">—</span>';
+  if (Math.abs(d) < 0.05) return '<span class="dchip flat">بلا تغيّر</span>';
+  const good = (d > 0) === goodWhenUp;
+  return `<span class="dchip ${good ? 'good' : 'bad'}">${d > 0 ? '▲' : '▼'} ${Math.abs(d).toFixed(1)}${points ? ' نقطة' : '%'}</span>`;
+}
+
+function renderReport(c) {
+  const k = computeKpis(c.s, c.p);
+  const { start, end } = dataRange();
+  const prev = previousPeriod(c.from, c.to, start);
+  const pk = prev ? computeKpis(...Object.values(sliceRows(prev.from, prev.to, c.allowed))) : null;
+  const f = (set) => (set.size ? [...set].map((x) => x || 'غير محدد').join('، ') : 'الكل');
+  const sub = `الفترة: من <bdi dir="ltr">${c.from || '—'}</bdi> إلى <bdi dir="ltr">${c.to || '—'}</bdi> · المناديب: ${escapeHtml(f(st.sel.reps))} · المناطق: ${escapeHtml(f(st.sel.regions))} · المناصب: ${escapeHtml(f(st.sel.positions))}`;
+  $('rTitle').textContent = `${st.system.name} — تقرير أداء المبيعات والتحصيل`;
+  for (const id of ['rSub', 'rSub2', 'rSub3']) $(id).innerHTML = sub;
+  const stamp = new Date().toLocaleString('en-GB', { dateStyle: 'short', timeStyle: 'short' });
+  const b = st.badge;
+  $('rMeta').innerHTML = `طُبع <bdi dir="ltr">${stamp}</bdi><br>${b ? `<span class="${b.ok ? 'vok' : 'vbad'}">${b.ok ? '✓' : '⚠'} ${escapeHtml(b.text)}</span>` : ''}`;
+
+  const tile = (l, v, d) => `<div class="tile"><div class="l">${l}</div><div class="v">${v}</div>${d}</div>`;
+  $('rHero').innerHTML = [
+    tile('إجمالي المبيعات', money(k.sales), chip(k.sales, pk?.sales)),
+    tile('إجمالي المقبوضات', money(k.receipts), chip(k.receipts, pk?.receipts)),
+    tile('نسبة التحصيل', `${k.paidPct.toFixed(1)}%`, chip(k.paidPct, pk ? pk.paidPct : null, true, true)),
+    tile('غير المدفوع', money(k.unpaid), chip(k.unpaid, pk?.unpaid, false)),
+    tile('عدد الفواتير', int(k.invoiceCount), chip(k.invoiceCount, pk?.invoiceCount)),
+  ].join('');
+
+  const newBy = newCustomersByRep(st.first, { from: c.from, to: c.to }, c.allowed);
+  const totalNew = [...newBy.values()].reduce((a, x) => a + x, 0);
+  const unreliable = newCustomersUnreliable(st.sales, c.from);
+  const tmap = targetsByRep(st.targets, c.allowed, monthsInRange(c.from, c.to));
+  const tSales = [...tmap.values()].reduce((a, t) => a + t.sales, 0);
+  const mini = (l, v, sub = '') => `<div class="mini"><div class="l">${l}</div><div class="v">${v}</div><div class="s">${sub}</div></div>`;
+  $('rMinis').innerHTML = [
+    mini('العملاء النشطون', int(k.activeCustomers)),
+    mini('متوسط الفاتورة', money(k.avgInvoice)),
+    mini('المرتجعات', money(k.returns), 'مجموع عمود المرتجع'),
+    unreliable ? mini('عملاء جدد', '—', 'الفترة تلامس بداية البيانات') : mini('عملاء جدد', int(totalNew), 'أول فاتورة ضمن الفترة'),
+    ...(tSales > 0 ? [mini('تحقيق هدف المبيعات', `${+progressPct(k.sales, tSales).toFixed(1)}%`, `من ${money(tSales)}`)] : []),
+  ].join('');
+
+  const reps = repSummary(c.s, c.p);
+  const total = totalsRow(reps);
+  const monthly = monthlyBreakdown(c.s, c.p);
+  const debtors = agingByCustomer(c.s, c.to || today());
+  $('rInsights').innerHTML = insights({ reps, totals: k, prevTotals: pk, monthly, debtors, overpaid: k.overpaid }, { money, pct: (p) => `${p.toFixed(1)}%`, month: fmtMonth })
+    .map((i) => `<li class="${i.kind}">${escapeHtml(i.text)}</li>`).join('') || '<li class="muted">لا توجد بيانات كافية.</li>';
+
+  // table: top 14 + folded rest + total
+  const rows = topWithOthers(reps, 14);
+  const share = (r) => (total.sales > 0 ? `${((r.sales / total.sales) * 100).toFixed(1)}%` : '—');
+  const line = (r, tot) => `<tr class="${tot ? 'total' : ''}"><td>${escapeHtml(r.rep)}</td><td class="n">${money(r.sales)}</td><td class="n">${money(r.paid)}</td><td>${progress(r.sales > 0 ? (r.paid / r.sales) * 100 : null)}</td><td class="n">${money(r.unpaid)}</td><td class="n">${money(r.receipts)}</td><td class="n">${int(r.invoices)}</td><td class="n">${tot ? '100%' : share(r)}</td></tr>`;
+  $('rTable').innerHTML = `<tr><th>المندوب</th><th class="n">المبيعات</th><th class="n">المحصَّل من الفواتير</th><th>نسبة التحصيل</th><th class="n">غير المدفوع</th><th class="n">المقبوضات</th><th class="n">الفواتير</th><th class="n">حصته</th></tr>${rows.map((r) => line(r, false)).join('')}${line({ ...total, rep: 'الإجمالي' }, true)}`;
+
+  $('rDebt').innerHTML = `<tr><th>#</th><th>العميل</th><th class="n">الرصيد</th><th class="n">أكثر من 90 يوماً</th></tr>${debtors.slice(0, 10).map((x, i) => `<tr><td>${i + 1}</td><td>${escapeHtml(x.customer)}</td><td class="n"><b>${money(x.net)}</b></td><td class="n ${x.b90 ? 'low' : ''}">${money(x.b90)}</td></tr>`).join('') || '<tr><td colspan="4" class="muted">لا أرصدة مدينة</td></tr>'}`;
+  $('rDebtNote').textContent = `الأعمار حتى ${c.to || today()}. عدد العملاء المدينين: ${int(debtors.length)}.`;
+  $('rTop').innerHTML = `<tr><th>#</th><th>العميل</th><th class="n">المبيعات</th><th class="n">الفواتير</th></tr>${topCustomers(c.s, 10).map((x, i) => `<tr><td>${i + 1}</td><td>${escapeHtml(x.customer)}</td><td class="n"><b>${money(x.sales)}</b></td><td class="n">${int(x.invoices)}</td></tr>`).join('')}`;
+  $('rFoot').innerHTML = `المصدر: تقارير دفترة المستوردة (${int(st.sales.length)} صف مبيعات، ${int(st.payments.length)} سند). التحصيل = المدفوع ÷ المبيعات، والمقبوضات تشمل سندات فواتير فترات سابقة. ${prev ? `المقارنة مع الفترة السابقة <bdi dir="ltr">${prev.from}</bdi> إلى <bdi dir="ltr">${prev.to}</bdi>.` : 'لا مقارنة: لا توجد بيانات للفترة السابقة.'}`;
+
+  renderReportCharts(reps, monthly, weeklyTrend(c.s, c.p));
+}
+
+function renderReportCharts(reps, monthly, trend) {
+  if (!window.Chart) return;
+  const css = getComputedStyle(document.documentElement);
+  const pick = (v, fallback) => (st.printing ? fallback : css.getPropertyValue(v).trim());
+  const text = pick('--text', '#111'), grid = pick('--line', '#d5d9e0'), accent = pick('--accent', '#0f766e'), warn = pick('--warn', '#b45309');
+  const size = st.printing ? 10 : document.body.classList.contains('presenting') ? 16 : 13;
+  // only pass a tick callback when there is one: an explicit `undefined` would replace the category labels
+  const axis = (cb) => ({ ticks: { color: text, font: { size }, ...(cb ? { callback: cb } : {}) }, grid: { color: grid } });
+  const base = { responsive: true, maintainAspectRatio: false, animation: st.printing ? false : undefined, plugins: { legend: { labels: { color: text, font: { size }, boxWidth: 14 } } } };
+  st.charts.rRep?.destroy(); st.charts.rMonth?.destroy();
+  const top = topWithOthers(reps, 8);
+  st.charts.rRep = new window.Chart($('rRepChart'), { type: 'bar', data: { labels: top.map((r) => r.rep), datasets: [
+    { label: 'المبيعات', data: top.map((r) => r.sales / 100), backgroundColor: accent, borderRadius: 3 },
+    { label: 'المحصَّل', data: top.map((r) => r.paid / 100), backgroundColor: warn, borderRadius: 3 }] },
+  options: { ...base, indexAxis: 'y', scales: { x: axis((v) => compact.format(v)), y: { ...axis(), grid: { display: false } } } } });
+  // a "monthly" chart with 1-2 months is just a couple of fat bars: switch to weeks for short periods
+  const weekly = monthly.length < 3;
+  const series = weekly ? trend.map((w) => ({ label: w.week, sales: w.sales, receipts: w.receipts })) : monthly.map((m) => ({ label: fmtMonth(m.month), sales: m.sales, receipts: m.receipts }));
+  $('rTrendTitle').textContent = weekly ? 'الاتجاه الأسبوعي: المبيعات والمقبوضات (بداية الأسبوع)' : 'الاتجاه الشهري: المبيعات والمقبوضات';
+  st.charts.rMonth = new window.Chart($('rMonthChart'), { type: 'bar', data: { labels: series.map((m) => m.label), datasets: [
+    { label: 'المبيعات', data: series.map((m) => m.sales / 100), backgroundColor: accent, borderRadius: 3 },
+    { label: 'المقبوضات', data: series.map((m) => m.receipts / 100), backgroundColor: warn, borderRadius: 3 }] },
+  options: { ...base, scales: { x: { ...axis(), grid: { display: false } }, y: axis((v) => compact.format(v)) } } });
+}
+
+const TAB_TITLE = { report: 'التقرير', summary: 'تحليل تفصيلي', aging: 'أكبر العملاء مدينية', invoices: 'الفواتير', payments: 'السندات', verify: 'التحقق من الأرقام' };
 // Report header shown only on paper: who/what/when, and which filters produced the numbers.
 function renderPrintHead(c) {
   const f = (set, all) => (set.size ? [...set].map((x) => x || 'غير محدد').join('، ') : all);
@@ -266,7 +371,8 @@ const like = (q, ...fields) => { const n = q.trim().toLowerCase(); return !n || 
 const view = {}; // current filtered lists, used by CSV export
 
 function renderPane(c) {
-  if (st.tab === 'verify') renderVerify(c);
+  if (st.tab === 'report') renderReport(c);
+  else if (st.tab === 'verify') renderVerify(c);
   else if (st.tab === 'aging') {
     const asOf = c.to || today();
     const q = $('agingQ').value;
@@ -422,6 +528,16 @@ function decodeSeed(d) {
   };
 }
 
+function computeBadge() {
+  if (!st.sales.length) return null;
+  const controls = st.controls && st.controls.nSales === st.sales.length && st.controls.nPayments === st.payments.length ? st.controls : null;
+  if (!controls && !st.ledger) return null;
+  const v = buildChecks({ sales: st.sales, payments: st.payments, controls: controls ?? {}, ledger: st.ledger });
+  const failed = v.checks.filter((x) => x.ok === false).length + v.repRows.filter((r) => !r.ok).length;
+  const n = v.checks.filter((x) => x.ok !== null).length + v.repRows.length;
+  return failed ? { ok: false, text: `${failed} فحص لا يطابق مصادر دفترة` } : { ok: true, text: `الأرقام مطابقة لملفات دفترة (${n} فحصاً)` };
+}
+
 async function refresh(resetRange = false) {
   [st.sales, st.payments, st.targets] = await Promise.all([browserStore.loadAll('sales'), browserStore.loadAll('payments'), browserStore.loadAll('targets')]);
   await loadMeta(); applySystem();
@@ -429,6 +545,7 @@ async function refresh(resetRange = false) {
   const metaRows = await browserStore.loadAll('meta');
   st.ledger = metaRows.find((m) => m.key === 'ledger')?.data ?? null;
   st.controls = metaRows.find((m) => m.key === 'controls')?.data ?? null;
+  st.badge = computeBadge();
   const dates = [...st.sales, ...st.payments].map((r) => r.date).sort();
   if (resetRange || (!$('from').value && dates.length)) { $('from').value = dates[0] ?? ''; $('to').value = dates.at(-1) ?? ''; }
   const logs = await browserStore.lastImports();
@@ -442,12 +559,44 @@ $('cancelBtn').onclick = () => $('dlg').close();
 $('files').onchange = (e) => previewFiles([...e.target.files]);
 $('saveBtn').onclick = saveImport;
 $('from').onchange = $('to').onchange = render;
-$('allBtn').onclick = () => { const d = [...st.sales, ...st.payments].map((r) => r.date).sort(); $('from').value = d[0] ?? ''; $('to').value = d.at(-1) ?? ''; render(); };
+$('presets').onclick = (e) => {
+  const b = e.target.closest('[data-preset]'); if (!b) return;
+  const { start, end } = dataRange();
+  const r = presetRange(b.dataset.preset, start, end);
+  if (r) { $('from').value = r.from; $('to').value = r.to; render(); }
+};
+function markPreset() {
+  const { start, end } = dataRange();
+  document.querySelectorAll('#presets [data-preset]').forEach((b) => {
+    const r = presetRange(b.dataset.preset, start, end);
+    b.classList.toggle('on', !!r && r.from === $('from').value && r.to === $('to').value);
+  });
+}
+// presentation mode: browser full screen, only the three report pages, arrow keys / Space to move between them
+function setPresenting(on) {
+  document.body.classList.toggle('presenting', on); document.documentElement.classList.toggle('presenting', on);
+  if (on && st.tab !== 'report') document.querySelector('#tabs [data-tab=report]').click();
+  setTimeout(render, 50);
+}
+$('presentBtn').onclick = async () => {
+  setPresenting(true);
+  try { await document.documentElement.requestFullscreen(); } catch { /* still works as a full-window view */ }
+};
+document.addEventListener('fullscreenchange', () => { if (!document.fullscreenElement) setPresenting(false); });
+document.addEventListener('keydown', (e) => {
+  if (!document.body.classList.contains('presenting')) return;
+  if (e.key === 'Escape') { setPresenting(false); if (document.fullscreenElement) document.exitFullscreen(); return; }
+  const pages = [...document.querySelectorAll('.report .page')];
+  const i = pages.findIndex((p) => p.getBoundingClientRect().top > -window.innerHeight / 2);
+  const go = (n) => pages[Math.max(0, Math.min(pages.length - 1, n))].scrollIntoView({ behavior: 'smooth' });
+  if (['ArrowLeft', 'ArrowDown', 'PageDown', ' '].includes(e.key)) { e.preventDefault(); go(i + 1); }
+  if (['ArrowRight', 'ArrowUp', 'PageUp'].includes(e.key)) { e.preventDefault(); go(i - 1); }
+});
 $('clearBtn').onclick = async () => { if (confirm('حذف الفواتير والسندات المحفوظة في هذا المتصفح؟ (الأهداف والإعدادات تبقى). تأكد من أخذ نسخة احتياطية أولاً.')) { await browserStore.clear(); await refresh(true); } };
 $('printBtn').onclick = () => window.print();
 // beforeprint also fires for Ctrl+P, so both routes get the white-paper charts and an up-to-date header.
-window.addEventListener('beforeprint', () => { st.printing = true; render(); });
-window.addEventListener('afterprint', () => { st.printing = false; render(); });
+window.addEventListener('beforeprint', () => { st.printing = true; document.body.classList.add('printing'); render(); });
+window.addEventListener('afterprint', () => { st.printing = false; document.body.classList.remove('printing'); render(); });
 function toggleSort(th) {
   const key = th?.dataset.sort; if (!key) return;
   const textual = ['rep', 'region', 'position'].includes(key);
@@ -501,6 +650,7 @@ $('restoreFile').onchange = async (e) => { try { await restore(e.target.files[0]
     if (m?.ledger) await browserStore.put('meta', { key: 'ledger', at: new Date().toISOString(), file: '(مضمَّن في الملف)', data: m.ledger });
     if (m?.controls) await browserStore.put('meta', { key: 'controls', data: { ...m.controls, nSales: seed.sales.length, nPayments: seed.payments.length } });
     $('notice').textContent = 'تم تحميل بياناتك الحقيقية مرة واحدة من الملف إلى هذا المتصفح. التعديلات (الأهداف والإعدادات) تُحفظ هنا.';
+    setTimeout(() => { $('notice').style.display = 'none'; }, 9000);
   }
   await refresh(true);
 })();

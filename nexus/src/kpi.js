@@ -175,3 +175,13 @@ export function newCustomersUnreliable(allSales, from, graceDays = 90) {
   const start = allSales.reduce((m, s) => (s.date < m ? s.date : m), allSales[0].date);
   return daysBetween(from, start) < graceDays;
 }
+
+export function topCustomers(sales, n) {
+  const m = new Map();
+  for (const s of sales) {
+    if (!s.customer) continue;
+    const c = m.get(s.customer) ?? { customer: s.customer, sales: 0, invoices: 0 };
+    c.sales += s.total; if (s.total > 0) c.invoices++; m.set(s.customer, c);
+  }
+  return [...m.values()].filter((c) => c.sales > 0).sort((a, b) => b.sales - a.sales).slice(0, n);
+}
